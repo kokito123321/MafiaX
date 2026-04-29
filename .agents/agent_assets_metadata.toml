@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "4rEu9Cmvs5T4onIE_xdkb"
+uri = "file://artifacts/mafia-x/assets/images/icon.png"
+type = "image"
+title = "mafia x icon"

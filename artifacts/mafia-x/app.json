@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Mafia X",
+    "slug": "mafia-x",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mafia-x",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Mafia X-ს კამერა სჭირდება ჰოსტის რეჟიმში გადასვლისთვის.",
+        "NSMicrophoneUsageDescription": "Mafia X-ს მიკროფონი სჭირდება ჰოსტის ხმის გადაცემისთვის."
+      }
+    },
+    "android": {
+      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Mafia X-ს კამერა სჭირდება ჰოსტის რეჟიმისთვის.",
+          "microphonePermission": "Mafia X-ს მიკროფონი სჭირდება ხმოვანი გადაცემისთვის.",
+          "recordAudioAndroid": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
