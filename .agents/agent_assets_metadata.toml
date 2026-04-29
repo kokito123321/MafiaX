@@ -6,3 +6,9 @@ id = "4rEu9Cmvs5T4onIE_xdkb"
 uri = "file://artifacts/mafia-x/assets/images/icon.png"
 type = "image"
 title = "mafia x icon"
+
+[[generated]]
+id = "RP78WEAueegC37abJsbfP"
+uri = "file://artifacts/mafia-x/assets/images/coin-mountain.png"
+type = "image"
+title = "X coin mountain illustration"

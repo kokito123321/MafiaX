@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -17,7 +18,11 @@ import { MafiaXLogo } from "@/components/MafiaXLogo";
 import { ProfilePanel } from "@/components/ProfilePanel";
 import { XCoin } from "@/components/XCoin";
 import { useAuth } from "@/contexts/AuthContext";
-import { useGame, type Room } from "@/contexts/GameContext";
+import {
+  ROOM_ENTRY_FEE,
+  useGame,
+  type Room,
+} from "@/contexts/GameContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function RoomsScreen() {
@@ -31,6 +36,7 @@ export default function RoomsScreen() {
     giftAmount,
     dismissGiftModal,
     createRoom,
+    spendCoins,
   } = useGame();
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -46,20 +52,46 @@ export default function RoomsScreen() {
     router.replace("/");
   }, [logout]);
 
-  const handleEnterRoom = useCallback(async (_room: Room) => {
-    if (Platform.OS !== "web") {
-      await Haptics.selectionAsync();
+  const enterAfterCharge = useCallback(async () => {
+    const ok = await spendCoins(ROOM_ENTRY_FEE);
+    if (!ok) {
+      Alert.alert(
+        "არასაკმარისი ბალანსი",
+        `ოთახში შესვლა ჯდება ${ROOM_ENTRY_FEE} X coin. შეავსე ბალანსი.`,
+        [
+          { text: "გაუქმება", style: "cancel" },
+          { text: "შევსება", onPress: () => router.push("/shop") },
+        ],
+      );
+      return false;
     }
-    router.push("/lobby");
-  }, []);
+    return true;
+  }, [spendCoins]);
+
+  const handleEnterRoom = useCallback(
+    async (_room: Room) => {
+      if (Platform.OS !== "web") {
+        await Haptics.selectionAsync();
+      }
+      const ok = await enterAfterCharge();
+      if (ok) router.push("/lobby");
+    },
+    [enterAfterCharge],
+  );
 
   const handleCreateRoom = useCallback(async () => {
     if (Platform.OS !== "web") {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    const ok = await enterAfterCharge();
+    if (!ok) return;
     createRoom();
     router.push("/lobby");
-  }, [createRoom]);
+  }, [createRoom, enterAfterCharge]);
+
+  const handleOpenShop = useCallback(() => {
+    router.push("/shop");
+  }, []);
 
   if (!user) return null;
 
@@ -76,7 +108,7 @@ export default function RoomsScreen() {
       <View
         style={[
           styles.topBar,
-          { paddingTop: topPad + 8 },
+          { paddingTop: topPad + 10 },
         ]}
       >
         <Pressable
@@ -94,14 +126,10 @@ export default function RoomsScreen() {
           <Text style={styles.avatarBtnText}>{initial}</Text>
         </Pressable>
 
-        <View style={styles.brandWrap}>
-          <MafiaXLogo size="md" variant="dark" />
-        </View>
-
         <View style={styles.rightCluster}>
           <Pressable
             onPress={handleCreateRoom}
-            hitSlop={8}
+            hitSlop={6}
             style={({ pressed }) => [
               styles.plusBtn,
               {
@@ -120,25 +148,32 @@ export default function RoomsScreen() {
               room
             </Text>
             <View style={styles.plusIconWrap}>
-              <Feather name="plus" size={18} color={colors.brandRed} />
+              <Feather name="plus" size={22} color={colors.brandRed} />
             </View>
           </Pressable>
 
-          <View
-            style={[
+          <Pressable
+            onPress={handleOpenShop}
+            hitSlop={6}
+            style={({ pressed }) => [
               styles.balancePill,
               {
                 backgroundColor: colors.panelSurface,
                 borderColor: colors.brandPurple,
+                opacity: pressed ? 0.85 : 1,
               },
             ]}
           >
-            <XCoin size={16} />
+            <XCoin size={28} />
             <Text style={[styles.balanceText, { color: colors.brandOrange }]}>
               {balance}
             </Text>
-          </View>
+          </Pressable>
         </View>
+      </View>
+
+      <View style={styles.heroLogoBlock}>
+        <MafiaXLogo size="hero" variant="dark" />
       </View>
 
       <View style={styles.titleBlock}>
@@ -146,7 +181,7 @@ export default function RoomsScreen() {
           აირჩიე მაგიდა
         </Text>
         <Text style={[styles.subtitleText, { color: colors.mutedForeground }]}>
-          {rooms.length} აქტიური ოთახი • შეუერთდი ან შექმენი ახალი
+          {rooms.length} აქტიური ოთახი • შესვლა {ROOM_ENTRY_FEE} X coin
         </Text>
       </View>
 
@@ -221,17 +256,17 @@ function RoomCard({ room, onPress }: RoomCardProps) {
           {room.isLive ? (
             <View
               style={[
-                styles.liveTag,
+                styles.statusTag,
                 { backgroundColor: colors.brandRed },
               ]}
             >
               <View style={styles.liveDot} />
-              <Text style={styles.liveTagText}>LIVE</Text>
+              <Text style={styles.statusTagText}>აქტიური</Text>
             </View>
           ) : (
             <View
               style={[
-                styles.liveTag,
+                styles.statusTag,
                 {
                   backgroundColor: "transparent",
                   borderWidth: 1,
@@ -241,11 +276,11 @@ function RoomCard({ room, onPress }: RoomCardProps) {
             >
               <Text
                 style={[
-                  styles.liveTagText,
+                  styles.statusTagText,
                   { color: colors.mutedForeground },
                 ]}
               >
-                IDLE
+                AFKA ROOM
               </Text>
             </View>
           )}
@@ -273,7 +308,7 @@ function RoomCard({ room, onPress }: RoomCardProps) {
             </Text>
           </View>
           <View style={styles.metaChip}>
-            <XCoin size={12} />
+            <XCoin size={14} />
             <Text style={[styles.metaText, { color: colors.brandOrange }]}>
               {room.entryFee}
             </Text>
@@ -293,14 +328,15 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 14,
     paddingBottom: 8,
     gap: 8,
   },
   avatarBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
@@ -308,11 +344,7 @@ const styles = StyleSheet.create({
   avatarBtnText: {
     color: "#fff",
     fontFamily: "Inter_700Bold",
-    fontSize: 14,
-  },
-  brandWrap: {
-    flex: 1,
-    alignItems: "center",
+    fontSize: 15,
   },
   rightCluster: {
     flexDirection: "row",
@@ -320,11 +352,11 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   plusBtn: {
-    height: 32,
-    minWidth: 60,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 10,
+    height: 42,
+    minWidth: 78,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -333,9 +365,9 @@ const styles = StyleSheet.create({
   plusBgText: {
     position: "absolute",
     fontFamily: "Inter_700Bold",
-    fontSize: 13,
-    letterSpacing: 1,
-    opacity: 0.35,
+    fontSize: 16,
+    letterSpacing: 1.5,
+    opacity: 0.32,
     textTransform: "lowercase",
   },
   plusIconWrap: {
@@ -343,22 +375,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   balancePill: {
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 10,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   balanceText: {
     fontFamily: "Inter_700Bold",
-    fontSize: 13,
+    fontSize: 15,
     letterSpacing: 0.5,
+  },
+  heroLogoBlock: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+    paddingHorizontal: 12,
   },
   titleBlock: {
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 4,
     paddingBottom: 10,
     gap: 4,
   },
@@ -410,12 +448,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 15,
   },
-  liveTag: {
+  statusTag: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 999,
   },
   liveDot: {
@@ -424,11 +462,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: "#fff",
   },
-  liveTagText: {
+  statusTagText: {
     color: "#fff",
     fontFamily: "Inter_700Bold",
-    fontSize: 9,
-    letterSpacing: 1,
+    fontSize: 10,
+    letterSpacing: 0.8,
   },
   cardHost: {
     fontFamily: "Inter_500Medium",
