@@ -64,7 +64,7 @@ export default function RegisterScreen() {
         gender,
         password,
       });
-      router.replace("/lobby");
+      router.replace("/rooms");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "რეგისტრაცია ვერ მოხერხდა";
       Alert.alert("შეცდომა", msg);

@@ -162,18 +162,12 @@ export default function LobbyScreen() {
   }, [draft, user]);
 
   const handleBack = useCallback(() => {
-    Alert.alert("დატოვება", "გსურს გასვლა და შესვლის გვერდზე დაბრუნება?", [
-      { text: "გაუქმება", style: "cancel" },
-      {
-        text: "გასვლა",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/");
-        },
-      },
-    ]);
-  }, [logout]);
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/rooms");
+    }
+  }, []);
 
   const handleLogoutFromPanel = useCallback(async () => {
     setProfileOpen(false);

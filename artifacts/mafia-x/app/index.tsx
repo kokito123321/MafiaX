@@ -31,7 +31,7 @@ export default function LoginScreen() {
 
   React.useEffect(() => {
     if (!initializing && user) {
-      router.replace("/lobby");
+      router.replace("/rooms");
     }
   }, [initializing, user]);
 
@@ -46,7 +46,7 @@ export default function LoginScreen() {
         await Haptics.selectionAsync();
       }
       await login(email, password);
-      router.replace("/lobby");
+      router.replace("/rooms");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "ვერ მოხერხდა შესვლა";
       Alert.alert("შეცდომა", msg);
@@ -59,7 +59,7 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await loginWithGoogle();
-      router.replace("/lobby");
+      router.replace("/rooms");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "ვერ მოხერხდა შესვლა";
       Alert.alert("შეცდომა", msg);

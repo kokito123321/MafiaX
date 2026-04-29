@@ -20,6 +20,7 @@ interface ProfilePanelProps {
   onClose: () => void;
   nickname: string;
   onLogout: () => void;
+  side?: "left" | "right";
 }
 
 interface MenuItem {
@@ -43,13 +44,15 @@ export function ProfilePanel({
   onClose,
   nickname,
   onLogout,
+  side = "right",
 }: ProfilePanelProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const screenW = Dimensions.get("window").width;
   const panelW = Math.max(Math.round(screenW * 0.5), 280);
 
-  const slide = useRef(new Animated.Value(panelW)).current;
+  const offscreen = side === "right" ? panelW : -panelW;
+  const slide = useRef(new Animated.Value(offscreen)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -70,7 +73,7 @@ export function ProfilePanel({
     } else {
       Animated.parallel([
         Animated.timing(slide, {
-          toValue: panelW,
+          toValue: offscreen,
           duration: 200,
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
@@ -82,9 +85,14 @@ export function ProfilePanel({
         }),
       ]).start();
     }
-  }, [visible, panelW, slide, fade]);
+  }, [visible, offscreen, slide, fade]);
 
   const initial = (nickname?.charAt(0) ?? "U").toUpperCase();
+
+  const sidePosition =
+    side === "right"
+      ? { right: 0, borderLeftWidth: 1, borderLeftColor: colors.panelBorder }
+      : { left: 0, borderRightWidth: 1, borderRightColor: colors.panelBorder };
 
   return (
     <Modal
@@ -107,10 +115,10 @@ export function ProfilePanel({
         <Animated.View
           style={[
             styles.panel,
+            sidePosition,
             {
               width: panelW,
               backgroundColor: colors.panelBg,
-              borderLeftColor: colors.panelBorder,
               transform: [{ translateX: slide }],
               paddingTop: Math.max(insets.top, 16) + 8,
               paddingBottom: Math.max(insets.bottom, 16),
@@ -277,10 +285,8 @@ export function ProfilePanel({
 const styles = StyleSheet.create({
   panel: {
     position: "absolute",
-    right: 0,
     top: 0,
     bottom: 0,
-    borderLeftWidth: 1,
     paddingHorizontal: 16,
   },
   headerRow: {
