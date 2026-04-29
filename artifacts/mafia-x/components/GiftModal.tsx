@@ -3,6 +3,7 @@ import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { XCoin } from "@/components/XCoin";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 
 export function GiftModal({ visible, amount, onClose }: Props) {
   const colors = useColors();
+  const { t, S } = useLanguage();
   return (
     <Modal
       visible={visible}
@@ -42,7 +44,7 @@ export function GiftModal({ visible, amount, onClose }: Props) {
               ]}
             >
               <Feather name="bell" size={11} color="#fff" />
-              <Text style={styles.tagText}>NEWS</Text>
+              <Text style={styles.tagText}>{t(S.gift.badge)}</Text>
             </View>
             <Pressable
               onPress={onClose}
@@ -80,7 +82,7 @@ export function GiftModal({ visible, amount, onClose }: Props) {
               { color: colors.panelText },
             ]}
           >
-            გილოცავ!
+            {t(S.gift.title)}
           </Text>
           <Text
             style={[
@@ -88,7 +90,7 @@ export function GiftModal({ visible, amount, onClose }: Props) {
               { color: colors.panelMuted },
             ]}
           >
-            თქვენ გადმოგეცათ რეგისტრაციის საჩუქარი
+            {t(S.gift.body)}
           </Text>
 
           <View
@@ -116,7 +118,7 @@ export function GiftModal({ visible, amount, onClose }: Props) {
               },
             ]}
           >
-            <Text style={styles.ctaText}>მადლობა</Text>
+            <Text style={styles.ctaText}>{t(S.gift.thanks)}</Text>
           </Pressable>
         </View>
       </View>

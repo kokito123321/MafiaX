@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
@@ -13,41 +14,58 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useColors } from "@/hooks/useColors";
+import type { Translations } from "@/lib/i18n";
 
 interface ProfilePanelProps {
   visible: boolean;
   onClose: () => void;
   nickname: string;
+  avatarUri?: string | null;
   onLogout: () => void;
+  onAvatarPress?: () => void;
   side?: "left" | "right";
 }
 
 interface MenuItem {
   key: string;
-  label: string;
+  labelKey: keyof typeof menuKeys;
   icon: React.ComponentProps<typeof Feather>["name"];
 }
 
+const menuKeys = {
+  stats: 1,
+  settings: 1,
+  referral: 1,
+  connection: 1,
+  rate: 1,
+  rules: 1,
+  news: 1,
+} as const;
+
 const MENU: MenuItem[] = [
-  { key: "stats", label: "ჩემი სტატისტიკა", icon: "bar-chart-2" },
-  { key: "settings", label: "პარამეტრები", icon: "settings" },
-  { key: "referral", label: "რეფერალ პროგრამა", icon: "gift" },
-  { key: "connection", label: "შეამოწმე ქონექშენი", icon: "wifi" },
-  { key: "rate", label: "თამაშის შეფასება", icon: "star" },
-  { key: "rules", label: "თამაშის წესები", icon: "book-open" },
-  { key: "news", label: "სიახლეები", icon: "bell" },
+  { key: "stats", labelKey: "stats", icon: "bar-chart-2" },
+  { key: "settings", labelKey: "settings", icon: "settings" },
+  { key: "referral", labelKey: "referral", icon: "gift" },
+  { key: "connection", labelKey: "connection", icon: "wifi" },
+  { key: "rate", labelKey: "rate", icon: "star" },
+  { key: "rules", labelKey: "rules", icon: "book-open" },
+  { key: "news", labelKey: "news", icon: "bell" },
 ];
 
 export function ProfilePanel({
   visible,
   onClose,
   nickname,
+  avatarUri,
   onLogout,
+  onAvatarPress,
   side = "right",
 }: ProfilePanelProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t, S } = useLanguage();
   const screenW = Dimensions.get("window").width;
   const panelW = Math.max(Math.round(screenW * 0.5), 280);
 
@@ -94,6 +112,16 @@ export function ProfilePanel({
       ? { right: 0, borderLeftWidth: 1, borderLeftColor: colors.panelBorder }
       : { left: 0, borderRightWidth: 1, borderRightColor: colors.panelBorder };
 
+  const labels: Record<string, Translations> = {
+    stats: S.profile.stats,
+    settings: S.profile.settings,
+    referral: S.profile.referral,
+    connection: S.profile.connection,
+    rate: S.profile.rate,
+    rules: S.profile.rules,
+    news: S.profile.news,
+  };
+
   return (
     <Modal
       visible={visible}
@@ -127,7 +155,7 @@ export function ProfilePanel({
         >
           <View style={styles.headerRow}>
             <Text style={[styles.headerTitle, { color: colors.panelMuted }]}>
-              PROFILE
+              {t(S.profile.panelTitle)}
             </Text>
             <Pressable
               onPress={onClose}
@@ -148,7 +176,13 @@ export function ProfilePanel({
             contentContainerStyle={styles.scroll}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.avatarBlock}>
+            <Pressable
+              onPress={onAvatarPress}
+              style={({ pressed }) => [
+                styles.avatarBlock,
+                { opacity: pressed && onAvatarPress ? 0.85 : 1 },
+              ]}
+            >
               <View
                 style={[
                   styles.avatarOuter,
@@ -161,8 +195,26 @@ export function ProfilePanel({
                     { backgroundColor: colors.brandPurple },
                   ]}
                 >
-                  <Text style={styles.avatarInitial}>{initial}</Text>
+                  {avatarUri ? (
+                    <Image
+                      source={{ uri: avatarUri }}
+                      style={styles.avatarImage}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <Text style={styles.avatarInitial}>{initial}</Text>
+                  )}
                 </View>
+                {onAvatarPress ? (
+                  <View
+                    style={[
+                      styles.editBadge,
+                      { backgroundColor: colors.brandRed },
+                    ]}
+                  >
+                    <Feather name="edit-2" size={10} color="#fff" />
+                  </View>
+                ) : null}
               </View>
               <Text
                 style={[styles.nickname, { color: colors.brandOrange }]}
@@ -170,7 +222,18 @@ export function ProfilePanel({
               >
                 {nickname}
               </Text>
-            </View>
+              {onAvatarPress ? (
+                <Text
+                  style={[
+                    styles.avatarHint,
+                    { color: colors.panelMuted },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {t(S.profile.tapToOpen)}
+                </Text>
+              ) : null}
+            </Pressable>
 
             <View
               style={[
@@ -183,7 +246,7 @@ export function ProfilePanel({
             >
               <View style={styles.rankRow}>
                 <Text style={[styles.rankLabel, { color: colors.panelMuted }]}>
-                  წოდება
+                  {t(S.profile.rank)}
                 </Text>
                 <View
                   style={[
@@ -191,11 +254,11 @@ export function ProfilePanel({
                     { backgroundColor: colors.brandRed },
                   ]}
                 >
-                  <Text style={styles.levelText}>დონე 1</Text>
+                  <Text style={styles.levelText}>{t(S.profile.level1)}</Text>
                 </View>
               </View>
               <Text style={[styles.rankValue, { color: colors.panelText }]}>
-                დამწყები
+                {t(S.profile.rookie)}
               </Text>
               <View
                 style={[
@@ -240,7 +303,7 @@ export function ProfilePanel({
                     <Text
                       style={[styles.menuLabel, { color: colors.panelText }]}
                     >
-                      {item.label}
+                      {t(labels[item.labelKey]!)}
                     </Text>
                     <Feather
                       name="chevron-right"
@@ -272,7 +335,7 @@ export function ProfilePanel({
             >
               <Feather name="log-out" size={16} color={colors.brandRed} />
               <Text style={[styles.logoutText, { color: colors.brandRed }]}>
-                გასვლა
+                {t(S.profile.logout)}
               </Text>
             </Pressable>
           </ScrollView>
@@ -313,7 +376,7 @@ const styles = StyleSheet.create({
   },
   avatarBlock: {
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     marginTop: 8,
   },
   avatarOuter: {
@@ -324,6 +387,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 4,
+    position: "relative",
   },
   avatarInner: {
     width: "100%",
@@ -331,11 +395,28 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarInitial: {
     fontFamily: "Inter_700Bold",
     fontSize: 40,
     color: "#ffffff",
+  },
+  editBadge: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#0a0a0a",
   },
   nickname: {
     fontFamily: "Inter_600SemiBold",
@@ -343,6 +424,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     maxWidth: 200,
     textAlign: "center",
+    marginTop: 4,
+  },
+  avatarHint: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 10,
+    textAlign: "center",
+    paddingHorizontal: 8,
+    fontStyle: "italic",
   },
   rankCard: {
     borderRadius: 14,

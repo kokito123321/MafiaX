@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -23,11 +24,13 @@ import {
   useGame,
   type Room,
 } from "@/contexts/GameContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function RoomsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t, S } = useLanguage();
   const { user, logout } = useAuth();
   const {
     balance,
@@ -52,21 +55,26 @@ export default function RoomsScreen() {
     router.replace("/");
   }, [logout]);
 
+  const handleProfilePhoto = useCallback(() => {
+    setProfileOpen(false);
+    router.push("/profile");
+  }, []);
+
   const enterAfterCharge = useCallback(async () => {
     const ok = await spendCoins(ROOM_ENTRY_FEE);
     if (!ok) {
       Alert.alert(
-        "არასაკმარისი ბალანსი",
-        `ოთახში შესვლა ჯდება ${ROOM_ENTRY_FEE} X coin. შეავსე ბალანსი.`,
+        t(S.rooms.insufficientTitle),
+        t(S.rooms.insufficientBody),
         [
-          { text: "გაუქმება", style: "cancel" },
-          { text: "შევსება", onPress: () => router.push("/shop") },
+          { text: t(S.common.cancel), style: "cancel" },
+          { text: t(S.rooms.topUp), onPress: () => router.push("/shop") },
         ],
       );
       return false;
     }
     return true;
-  }, [spendCoins]);
+  }, [spendCoins, t, S]);
 
   const handleEnterRoom = useCallback(
     async (_room: Room) => {
@@ -120,10 +128,19 @@ export default function RoomsScreen() {
               borderColor: colors.brandRed,
               backgroundColor: colors.brandPurple,
               opacity: pressed ? 0.85 : 1,
+              overflow: "hidden",
             },
           ]}
         >
-          <Text style={styles.avatarBtnText}>{initial}</Text>
+          {user.avatarUri ? (
+            <Image
+              source={{ uri: user.avatarUri }}
+              style={styles.avatarImageWrap}
+              contentFit="cover"
+            />
+          ) : (
+            <Text style={styles.avatarBtnText}>{initial}</Text>
+          )}
         </Pressable>
 
         <View style={styles.rightCluster}>
@@ -145,7 +162,7 @@ export default function RoomsScreen() {
                 { color: colors.brandPurpleSoft },
               ]}
             >
-              room
+              {t(S.rooms.roomBtn)}
             </Text>
             <View style={styles.plusIconWrap}>
               <Feather name="plus" size={22} color={colors.brandRed} />
@@ -178,10 +195,11 @@ export default function RoomsScreen() {
 
       <View style={styles.titleBlock}>
         <Text style={[styles.titleText, { color: colors.text }]}>
-          აირჩიე მაგიდა
+          {t(S.rooms.title)}
         </Text>
         <Text style={[styles.subtitleText, { color: colors.mutedForeground }]}>
-          {rooms.length} აქტიური ოთახი • შესვლა {ROOM_ENTRY_FEE} X coin
+          {rooms.length} {t(S.rooms.activeRooms)} • {t(S.rooms.entryFee)}{" "}
+          {ROOM_ENTRY_FEE} X coin
         </Text>
       </View>
 
@@ -202,7 +220,9 @@ export default function RoomsScreen() {
         visible={profileOpen}
         onClose={() => setProfileOpen(false)}
         nickname={user.nickname}
+        avatarUri={user.avatarUri ?? null}
         onLogout={handleLogout}
+        onAvatarPress={handleProfilePhoto}
         side="left"
       />
 
@@ -222,6 +242,7 @@ interface RoomCardProps {
 
 function RoomCard({ room, onPress }: RoomCardProps) {
   const colors = useColors();
+  const { t, S } = useLanguage();
   const initial = (room.hostNickname.charAt(0) ?? "?").toUpperCase();
   const isFull = room.players >= room.capacity;
   return (
@@ -261,7 +282,7 @@ function RoomCard({ room, onPress }: RoomCardProps) {
               ]}
             >
               <View style={styles.liveDot} />
-              <Text style={styles.statusTagText}>აქტიური</Text>
+              <Text style={styles.statusTagText}>{t(S.rooms.live)}</Text>
             </View>
           ) : (
             <View
@@ -280,7 +301,7 @@ function RoomCard({ room, onPress }: RoomCardProps) {
                   { color: colors.mutedForeground },
                 ]}
               >
-                AFKA ROOM
+                {t(S.rooms.afk)}
               </Text>
             </View>
           )}
@@ -290,7 +311,7 @@ function RoomCard({ room, onPress }: RoomCardProps) {
           style={[styles.cardHost, { color: colors.mutedForeground }]}
           numberOfLines={1}
         >
-          host: {room.hostNickname} • {room.region}
+          {t(S.rooms.host)}: {room.hostNickname} • {room.region}
         </Text>
 
         <View style={styles.cardMetaRow}>
@@ -340,6 +361,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
+  },
+  avatarImageWrap: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 21,
+    overflow: "hidden",
   },
   avatarBtnText: {
     color: "#fff",

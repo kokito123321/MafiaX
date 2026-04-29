@@ -16,13 +16,16 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { LanguagePicker } from "@/components/LanguagePicker";
 import { MafiaXLogo } from "@/components/MafiaXLogo";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t, S } = useLanguage();
   const { user, initializing, login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +40,7 @@ export default function LoginScreen() {
 
   const handleEmailLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert("შეიყვანეთ მეილი და პაროლი");
+      Alert.alert(t(S.login.needCreds));
       return;
     }
     setSubmitting(true);
@@ -48,8 +51,8 @@ export default function LoginScreen() {
       await login(email, password);
       router.replace("/rooms");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "ვერ მოხერხდა შესვლა";
-      Alert.alert("შეცდომა", msg);
+      const msg = e instanceof Error ? e.message : t(S.common.error);
+      Alert.alert(t(S.common.error), msg);
     } finally {
       setSubmitting(false);
     }
@@ -61,8 +64,8 @@ export default function LoginScreen() {
       await loginWithGoogle();
       router.replace("/rooms");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "ვერ მოხერხდა შესვლა";
-      Alert.alert("შეცდომა", msg);
+      const msg = e instanceof Error ? e.message : t(S.common.error);
+      Alert.alert(t(S.common.error), msg);
     } finally {
       setSubmitting(false);
     }
@@ -83,6 +86,19 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.loginBackground }]}>
+      <View
+        style={[
+          styles.langCorner,
+          { top: Math.max(insets.top, 16) + 4 },
+        ]}
+      >
+        <LanguagePicker
+          surfaceColor={colors.loginInputBg}
+          borderColor={colors.loginInputBorder}
+          textColor={colors.text}
+        />
+      </View>
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -91,7 +107,7 @@ export default function LoginScreen() {
           contentContainerStyle={[
             styles.scroll,
             {
-              paddingTop: Math.max(insets.top, 32) + 12,
+              paddingTop: Math.max(insets.top, 32) + 56,
               paddingBottom: Math.max(insets.bottom, 24) + 60,
             },
           ]}
@@ -145,7 +161,7 @@ export default function LoginScreen() {
             <View style={styles.googleIconWrap}>
               <GoogleGlyph />
             </View>
-            <Text style={styles.googleText}>Google-ით შესვლა</Text>
+            <Text style={styles.googleText}>{t(S.login.google)}</Text>
           </Pressable>
 
           <View style={styles.dividerRow}>
@@ -153,7 +169,7 @@ export default function LoginScreen() {
               style={[styles.divider, { backgroundColor: colors.loginInputBorder }]}
             />
             <Text style={[styles.dividerText, { color: colors.loginMuted }]}>
-              ან
+              {t(S.login.or)}
             </Text>
             <View
               style={[styles.divider, { backgroundColor: colors.loginInputBorder }]}
@@ -162,7 +178,7 @@ export default function LoginScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.loginMuted }]}>
-              მეილი
+              {t(S.login.email)}
             </Text>
             <View
               style={[
@@ -188,7 +204,7 @@ export default function LoginScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.loginMuted }]}>
-              პაროლი
+              {t(S.login.password)}
             </Text>
             <View
               style={[
@@ -235,14 +251,11 @@ export default function LoginScreen() {
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryBtnText}>შესვლა</Text>
+              <Text style={styles.primaryBtnText}>{t(S.login.signIn)}</Text>
             )}
           </Pressable>
 
           <View style={styles.registerRow}>
-            <Text style={{ color: colors.loginMuted, fontFamily: "Inter_400Regular" }}>
-              ჯერ არ გაქვს ანგარიში?
-            </Text>
             <Pressable
               onPress={() => router.push("/register")}
               hitSlop={8}
@@ -254,7 +267,7 @@ export default function LoginScreen() {
                   marginLeft: 6,
                 }}
               >
-                რეგისტრაცია
+                {t(S.login.register)}
               </Text>
             </Pressable>
           </View>
@@ -269,7 +282,7 @@ export default function LoginScreen() {
         ]}
       >
         <Text style={[styles.poweredLabel, { color: colors.loginMuted }]}>
-          powered By     
+          powered By{" "}
           <Text style={[styles.poweredBrand, { color: colors.brandRed }]}>
             LaSheX
           </Text>
@@ -306,6 +319,11 @@ const glyphStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   loader: { flex: 1, alignItems: "center", justifyContent: "center" },
+  langCorner: {
+    position: "absolute",
+    left: 16,
+    zIndex: 10,
+  },
   scroll: {
     paddingHorizontal: 24,
     gap: 18,

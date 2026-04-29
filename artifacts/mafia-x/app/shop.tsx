@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { XCoin } from "@/components/XCoin";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGame } from "@/contexts/GameContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
 interface PackOption {
@@ -22,9 +23,8 @@ interface PackOption {
   amount: number;
   amountLabel: string;
   priceLabel: string;
-  badge?: string;
+  badge?: "popular" | "bestValue" | "sale";
   unlimited?: boolean;
-  durationLabel?: string;
 }
 
 const PACKS: PackOption[] = [
@@ -35,18 +35,23 @@ const PACKS: PackOption[] = [
     amount: 1000,
     amountLabel: "1,000",
     priceLabel: "10 ₾",
-    badge: "POPULAR",
+    badge: "popular",
   },
-  { id: "p4", amount: 5000, amountLabel: "5,000", priceLabel: "12 ₾", badge: "BEST VALUE" },
+  {
+    id: "p4",
+    amount: 5000,
+    amountLabel: "5,000",
+    priceLabel: "12 ₾",
+    badge: "bestValue",
+  },
   { id: "p5", amount: 10000, amountLabel: "10,000", priceLabel: "30 ₾" },
   {
     id: "p6",
     amount: 0,
-    amountLabel: "ულიმიტო",
+    amountLabel: "ULTD",
     priceLabel: "50 ₾",
-    durationLabel: "6 თვე",
     unlimited: true,
-    badge: "VIP",
+    badge: "sale",
   },
 ];
 
@@ -55,6 +60,7 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { balance, addCoins } = useGame();
+  const { t, S } = useLanguage();
 
   React.useEffect(() => {
     if (!user) router.replace("/");
@@ -62,31 +68,32 @@ export default function ShopScreen() {
 
   const handleBuy = useCallback(
     (pack: PackOption) => {
-      Alert.alert(
-        "შეძენის დადასტურება",
-        pack.unlimited
-          ? `გსურს შეიძინო ულიმიტო პაკეტი (${pack.durationLabel}) ფასად ${pack.priceLabel}?`
-          : `გსურს შეიძინო ${pack.amountLabel} X coin ფასად ${pack.priceLabel}?`,
-        [
-          { text: "გაუქმება", style: "cancel" },
-          {
-            text: "შეძენა",
-            onPress: async () => {
-              if (!pack.unlimited && pack.amount > 0) {
-                await addCoins(pack.amount);
-              }
-              Alert.alert(
-                "წარმატება",
-                pack.unlimited
-                  ? "ულიმიტო პაკეტი გააქტიურდა (ნიმუშის რეჟიმი)."
-                  : `${pack.amountLabel} X coin დაგერიცხა (ნიმუშის რეჟიმი).`,
-              );
-            },
+      const body = pack.unlimited
+        ? `${t(S.shop.confirmUnlimited)} (${t(S.shop.months6)}) ${t(
+            S.shop.forPrice,
+          )} ${pack.priceLabel}?`
+        : `${t(S.shop.confirmCoins)} ${pack.amountLabel} X coin ${t(
+            S.shop.forPrice,
+          )} ${pack.priceLabel}?`;
+      Alert.alert(t(S.shop.confirmTitle), body, [
+        { text: t(S.common.cancel), style: "cancel" },
+        {
+          text: t(S.shop.buyBtn),
+          onPress: async () => {
+            if (!pack.unlimited && pack.amount > 0) {
+              await addCoins(pack.amount);
+            }
+            Alert.alert(
+              t(S.common.success),
+              pack.unlimited
+                ? t(S.shop.unlimitedActivated)
+                : `${pack.amountLabel} ${t(S.shop.creditedDemo)}`,
+            );
           },
-        ],
-      );
+        },
+      ]);
     },
-    [addCoins],
+    [addCoins, t, S],
   );
 
   if (!user) return null;
@@ -110,19 +117,22 @@ export default function ShopScreen() {
           <Feather name="arrow-left" size={18} color={colors.text} />
         </Pressable>
 
-        <View style={styles.balanceWrap}>
-          <XCoin size={22} />
-          <Text
-            style={[
-              styles.balanceText,
-              { color: colors.brandOrange },
-            ]}
-          >
+        <View style={{ flex: 1 }} />
+
+        <View
+          style={[
+            styles.balancePill,
+            {
+              backgroundColor: colors.panelSurface,
+              borderColor: colors.brandPurple,
+            },
+          ]}
+        >
+          <XCoin size={32} />
+          <Text style={[styles.balanceText, { color: colors.brandOrange }]}>
             {balance}
           </Text>
         </View>
-
-        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView
@@ -146,7 +156,7 @@ export default function ShopScreen() {
                   { color: colors.text },
                 ]}
               >
-                შეისყიდე
+                {t(S.shop.titlePrefix)}
               </Text>
               <XCoin size={36} />
               <Text
@@ -157,14 +167,16 @@ export default function ShopScreen() {
               >
                 X coin
               </Text>
-              <Text
-                style={[
-                  styles.heroTitle,
-                  { color: colors.text },
-                ]}
-              >
-                ები
-              </Text>
+              {t(S.shop.titleSuffix) ? (
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    { color: colors.text },
+                  ]}
+                >
+                  {t(S.shop.titleSuffix)}
+                </Text>
+              ) : null}
             </View>
             <Text
               style={[
@@ -172,7 +184,7 @@ export default function ShopScreen() {
                 { color: colors.mutedForeground },
               ]}
             >
-              აირჩიე პაკეტი და განაგრძე თამაში
+              {t(S.shop.subtitle)}
             </Text>
           </View>
         </View>
@@ -186,7 +198,7 @@ export default function ShopScreen() {
         <View style={styles.disclaimer}>
           <Feather name="info" size={12} color={colors.mutedForeground} />
           <Text style={[styles.disclaimerText, { color: colors.mutedForeground }]}>
-            ფასები ნაჩვენებია ნიმუშის სახით. რეალური გადახდა ჯერ არ არის ჩართული.
+            {t(S.shop.demoNote)}
           </Text>
         </View>
       </ScrollView>
@@ -199,9 +211,31 @@ interface PackRowProps {
   onPress: () => void;
 }
 
+const SALE_COLOR = "#ffd633"; // bright yellow, eye-catching, NOT red
+const POPULAR_COLOR = "#ff8a3d"; // orange
+const BEST_COLOR = "#7a4d9e"; // purple soft
+
 function PackRow({ pack, onPress }: PackRowProps) {
   const colors = useColors();
+  const { t, S } = useLanguage();
   const isVip = pack.unlimited;
+
+  const badgeColor = !pack.badge
+    ? null
+    : pack.badge === "sale"
+      ? SALE_COLOR
+      : pack.badge === "popular"
+        ? POPULAR_COLOR
+        : BEST_COLOR;
+  const badgeTextColor = pack.badge === "sale" ? "#0a0a0a" : "#fff";
+  const badgeLabel = !pack.badge
+    ? ""
+    : pack.badge === "sale"
+      ? t(S.shop.sale)
+      : pack.badge === "popular"
+        ? t(S.shop.popular)
+        : t(S.shop.bestValue);
+
   return (
     <Pressable
       onPress={onPress}
@@ -209,57 +243,73 @@ function PackRow({ pack, onPress }: PackRowProps) {
         styles.packRow,
         {
           backgroundColor: isVip ? colors.brandPurple : colors.card,
-          borderColor: isVip ? colors.brandRed : colors.brandPurple,
+          borderColor: isVip ? SALE_COLOR : colors.brandPurple,
+          borderWidth: isVip ? 2 : 1.5,
           opacity: pressed ? 0.9 : 1,
         },
       ]}
     >
+      {pack.badge ? (
+        <View
+          style={[
+            styles.cornerBadge,
+            { backgroundColor: badgeColor ?? colors.brandOrange },
+          ]}
+        >
+          <Text
+            style={[
+              styles.cornerBadgeText,
+              { color: badgeTextColor },
+            ]}
+          >
+            {badgeLabel}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.packLeft}>
         <XCoin size={32} />
         <View style={styles.packLabels}>
           <View style={styles.packAmountRow}>
-            <Text
-              style={[
-                styles.packAmount,
-                { color: isVip ? "#fff" : colors.text },
-              ]}
-            >
-              {pack.amountLabel}
-            </Text>
-            {!pack.unlimited ? (
+            {pack.unlimited ? (
               <Text
                 style={[
-                  styles.packUnit,
-                  { color: isVip ? "#fff" : colors.brandOrange },
+                  styles.packAmount,
+                  { color: "#fff" },
                 ]}
               >
-                X coin
+                {t(S.shop.unlimited)}
               </Text>
-            ) : null}
+            ) : (
+              <>
+                <Text
+                  style={[
+                    styles.packAmount,
+                    { color: isVip ? "#fff" : colors.text },
+                  ]}
+                >
+                  {pack.amountLabel}
+                </Text>
+                <Text
+                  style={[
+                    styles.packUnit,
+                    { color: isVip ? "#fff" : colors.brandOrange },
+                  ]}
+                >
+                  X coin
+                </Text>
+              </>
+            )}
           </View>
-          {pack.durationLabel ? (
+          {pack.unlimited ? (
             <Text
               style={[
                 styles.packDuration,
-                { color: isVip ? "#fff" : colors.mutedForeground },
+                { color: "#fff" },
               ]}
             >
-              {pack.durationLabel}
+              {t(S.shop.months6)}
             </Text>
-          ) : null}
-          {pack.badge ? (
-            <View
-              style={[
-                styles.packBadge,
-                {
-                  backgroundColor: isVip
-                    ? colors.brandRed
-                    : colors.brandOrange,
-                },
-              ]}
-            >
-              <Text style={styles.packBadgeText}>{pack.badge}</Text>
-            </View>
           ) : null}
         </View>
       </View>
@@ -288,9 +338,9 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 14,
     paddingBottom: 6,
+    gap: 8,
   },
   backBtn: {
     width: 38,
@@ -300,21 +350,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1.5,
   },
-  balanceWrap: {
+  balancePill: {
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   balanceText: {
     fontFamily: "Inter_700Bold",
-    fontSize: 16,
+    fontSize: 18,
+    letterSpacing: 0.5,
   },
   scroll: {
     paddingHorizontal: 16,
     gap: 18,
   },
   heroBlock: {
-    height: 220,
+    height: 240,
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
@@ -344,6 +399,9 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 22,
     letterSpacing: 0.5,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   heroSubtitle: {
     fontFamily: "Inter_500Medium",
@@ -360,7 +418,21 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderRadius: 14,
-    borderWidth: 1.5,
+    position: "relative",
+    overflow: "hidden",
+  },
+  cornerBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderBottomLeftRadius: 10,
+  },
+  cornerBadgeText: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 10,
+    letterSpacing: 1.2,
   },
   packLeft: {
     flexDirection: "row",
@@ -376,6 +448,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     gap: 6,
+    flexWrap: "wrap",
   },
   packAmount: {
     fontFamily: "Inter_700Bold",
@@ -389,19 +462,6 @@ const styles = StyleSheet.create({
   packDuration: {
     fontFamily: "Inter_500Medium",
     fontSize: 11,
-  },
-  packBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 999,
-    marginTop: 2,
-  },
-  packBadgeText: {
-    color: "#fff",
-    fontFamily: "Inter_700Bold",
-    fontSize: 9,
-    letterSpacing: 1,
   },
   packRight: {
     flexDirection: "row",

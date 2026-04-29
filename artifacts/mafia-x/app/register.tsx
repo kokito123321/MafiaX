@@ -17,11 +17,13 @@ import {
 
 import { BrandHeader } from "@/components/BrandHeader";
 import { useAuth, type Gender } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function RegisterScreen() {
   const colors = useColors();
   const { register } = useAuth();
+  const { t, S } = useLanguage();
 
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
@@ -32,24 +34,24 @@ export default function RegisterScreen() {
 
   const handleSubmit = async () => {
     if (!nickname.trim()) {
-      Alert.alert("შეიყვანე მეტსახელი (nickname)");
+      Alert.alert(t(S.register.nickname));
       return;
     }
     if (!email.trim() || !email.includes("@")) {
-      Alert.alert("შეიყვანე სწორი მეილი");
+      Alert.alert(t(S.register.email));
       return;
     }
     const ageNum = parseInt(age, 10);
     if (!Number.isFinite(ageNum) || ageNum < 16 || ageNum > 99) {
-      Alert.alert("შეიყვანე ასაკი (16-99)");
+      Alert.alert(t(S.register.age) + " (16-99)");
       return;
     }
     if (!gender) {
-      Alert.alert("აირჩიე სქესი");
+      Alert.alert(t(S.register.gender));
       return;
     }
     if (password.length < 4) {
-      Alert.alert("პაროლი მინიმუმ 4 სიმბოლო");
+      Alert.alert(t(S.register.password) + " (min 4)");
       return;
     }
     setSubmitting(true);
@@ -66,8 +68,8 @@ export default function RegisterScreen() {
       });
       router.replace("/rooms");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "რეგისტრაცია ვერ მოხერხდა";
-      Alert.alert("შეცდომა", msg);
+      const msg = e instanceof Error ? e.message : t(S.common.error);
+      Alert.alert(t(S.common.error), msg);
     } finally {
       setSubmitting(false);
     }
@@ -92,24 +94,21 @@ export default function RegisterScreen() {
               style={styles.backBtn}
             >
               <Feather name="arrow-left" size={20} color="#0a0a0a" />
-              <Text style={styles.backText}>უკან</Text>
+              <Text style={styles.backText}>{t(S.common.back)}</Text>
             </Pressable>
-            <Text style={styles.title}>ანგარიშის შექმნა</Text>
-            <Text style={styles.subtitle}>
-              შეავსე მონაცემები და შეუერთდი მაფიას
-            </Text>
+            <Text style={styles.title}>{t(S.register.title)}</Text>
           </View>
 
           <Field
-            label="მეტსახელი"
+            label={t(S.register.nickname)}
             icon="user"
             value={nickname}
             onChangeText={setNickname}
-            placeholder="თქვენი nickname"
+            placeholder={t(S.register.nickname)}
           />
 
           <Field
-            label="მეილი"
+            label={t(S.register.email)}
             icon="mail"
             value={email}
             onChangeText={setEmail}
@@ -119,27 +118,27 @@ export default function RegisterScreen() {
           />
 
           <Field
-            label="ასაკი"
+            label={t(S.register.age)}
             icon="calendar"
             value={age}
             onChangeText={(v) => setAge(v.replace(/[^0-9]/g, ""))}
-            placeholder="მაგ: 24"
+            placeholder="24"
             keyboardType="number-pad"
           />
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>სქესი</Text>
+            <Text style={styles.label}>{t(S.register.gender)}</Text>
             <View style={styles.genderRow}>
               <GenderTile
                 active={gender === "male"}
-                label="მამრობითი"
+                label={t(S.register.male)}
                 icon="male"
                 onPress={() => setGender("male")}
                 activeColor={colors.brandPurple}
               />
               <GenderTile
                 active={gender === "female"}
-                label="მდედრობითი"
+                label={t(S.register.female)}
                 icon="female"
                 onPress={() => setGender("female")}
                 activeColor={colors.brandRed}
@@ -148,11 +147,11 @@ export default function RegisterScreen() {
           </View>
 
           <Field
-            label="პაროლი"
+            label={t(S.register.password)}
             icon="lock"
             value={password}
             onChangeText={setPassword}
-            placeholder="მინ. 4 სიმბოლო"
+            placeholder="••••••••"
             secureTextEntry
           />
 
@@ -170,7 +169,7 @@ export default function RegisterScreen() {
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryBtnText}>რეგისტრაცია</Text>
+              <Text style={styles.primaryBtnText}>{t(S.register.save)}</Text>
             )}
           </Pressable>
 
@@ -186,7 +185,7 @@ export default function RegisterScreen() {
                 fontSize: 14,
               }}
             >
-              უკვე გაქვს ანგარიში? შესვლა
+              {t(S.register.haveAccount)} {t(S.login.signIn)}
             </Text>
           </Pressable>
         </ScrollView>
@@ -307,11 +306,6 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontFamily: "Inter_700Bold",
     color: "#0a0a0a",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#5a5a60",
-    fontFamily: "Inter_400Regular",
   },
   fieldGroup: { gap: 8 },
   label: {

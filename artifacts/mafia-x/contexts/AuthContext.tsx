@@ -21,6 +21,7 @@ export interface User {
   gender: Gender;
   password: string;
   provider: "email" | "google";
+  avatarUri?: string;
   createdAt: string;
 }
 
@@ -42,6 +43,7 @@ interface AuthContextValue {
   loginWithGoogle: () => Promise<PublicUser>;
   register: (payload: RegisterPayload) => Promise<PublicUser>;
   logout: () => Promise<void>;
+  setAvatar: (uri: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -170,9 +172,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await persistSession(null);
   }, [persistSession]);
 
+  const setAvatar = useCallback<AuthContextValue["setAvatar"]>(
+    async (uri) => {
+      if (!user) return;
+      const users = await readUsers();
+      const idx = users.findIndex((u) => u.id === user.id);
+      if (idx >= 0) {
+        const updated: User = {
+          ...users[idx]!,
+          avatarUri: uri ?? undefined,
+        };
+        const next = [...users];
+        next[idx] = updated;
+        await writeUsers(next);
+        await persistSession(strip(updated));
+      }
+    },
+    [user, persistSession],
+  );
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, initializing, login, loginWithGoogle, register, logout }),
-    [user, initializing, login, loginWithGoogle, register, logout],
+    () => ({
+      user,
+      initializing,
+      login,
+      loginWithGoogle,
+      register,
+      logout,
+      setAvatar,
+    }),
+    [user, initializing, login, loginWithGoogle, register, logout, setAvatar],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
