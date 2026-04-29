@@ -14,13 +14,15 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BrandHeader } from "@/components/BrandHeader";
+import { MafiaXLogo } from "@/components/MafiaXLogo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 export default function LoginScreen() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const { user, initializing, login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -71,7 +73,7 @@ export default function LoginScreen() {
       <View
         style={[
           styles.loader,
-          { backgroundColor: colors.background },
+          { backgroundColor: colors.loginBackground },
         ]}
       >
         <ActivityIndicator color={colors.brandRed} size="large" />
@@ -80,34 +82,52 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <BrandHeader background={colors.background} variant="light" />
+    <View style={[styles.root, { backgroundColor: colors.loginBackground }]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingTop: Math.max(insets.top, 32) + 12,
+              paddingBottom: Math.max(insets.bottom, 24) + 60,
+            },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.heroBlock}>
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: "#0a0a0a", borderColor: colors.brandRed },
-              ]}
-            >
-              <Text style={[styles.badgeText, { color: "#fff" }]}>
-                ENTER THE FAMILY
+            <MafiaXLogo size="hero" variant="dark" />
+            <View style={styles.welcomeRow}>
+              <Text style={[styles.welcomeText, { color: colors.loginMuted }]}>
+                WELCOME TO{" "}
+              </Text>
+              <Text
+                style={[
+                  styles.welcomeText,
+                  {
+                    color: colors.brandPurpleSoft,
+                    fontFamily: "Inter_700Bold",
+                  },
+                ]}
+              >
+                mafia
+              </Text>
+              <Text
+                style={[
+                  styles.welcomeText,
+                  {
+                    color: colors.brandRed,
+                    fontFamily: "Inter_700Bold",
+                    fontSize: 16,
+                  },
+                ]}
+              >
+                "X"
               </Text>
             </View>
-            <Text style={[styles.title, { color: "#0a0a0a" }]}>
-              შემოდი თამაშში
-            </Text>
-            <Text style={[styles.subtitle, { color: "#5a5a60" }]}>
-              გაიარე ავტორიზაცია და დაიკავე ადგილი მაგიდასთან
-            </Text>
           </View>
 
           <Pressable
@@ -116,7 +136,8 @@ export default function LoginScreen() {
             style={({ pressed }) => [
               styles.googleBtn,
               {
-                borderColor: "#0a0a0a",
+                borderColor: colors.loginInputBorder,
+                backgroundColor: colors.loginInputBg,
                 opacity: pressed || submitting ? 0.7 : 1,
               },
             ]}
@@ -128,48 +149,64 @@ export default function LoginScreen() {
           </Pressable>
 
           <View style={styles.dividerRow}>
-            <View style={[styles.divider, { backgroundColor: "#d8d8de" }]} />
-            <Text style={[styles.dividerText, { color: "#7a7a82" }]}>ან</Text>
-            <View style={[styles.divider, { backgroundColor: "#d8d8de" }]} />
+            <View
+              style={[styles.divider, { backgroundColor: colors.loginInputBorder }]}
+            />
+            <Text style={[styles.dividerText, { color: colors.loginMuted }]}>
+              ან
+            </Text>
+            <View
+              style={[styles.divider, { backgroundColor: colors.loginInputBorder }]}
+            />
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>მეილი</Text>
+            <Text style={[styles.label, { color: colors.loginMuted }]}>
+              მეილი
+            </Text>
             <View
               style={[
                 styles.inputWrap,
-                { borderColor: "#0a0a0a", backgroundColor: "#fafafa" },
+                {
+                  borderColor: colors.loginInputBorder,
+                  backgroundColor: colors.loginInputBg,
+                },
               ]}
             >
-              <Feather name="mail" size={18} color="#0a0a0a" />
+              <Feather name="mail" size={18} color={colors.loginMuted} />
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor="#9a9aa0"
+                placeholder="MAIL"
+                placeholderTextColor={colors.loginPlaceholder}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                style={styles.input}
+                style={[styles.input, { color: colors.text }]}
               />
             </View>
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>პაროლი</Text>
+            <Text style={[styles.label, { color: colors.loginMuted }]}>
+              პაროლი
+            </Text>
             <View
               style={[
                 styles.inputWrap,
-                { borderColor: "#0a0a0a", backgroundColor: "#fafafa" },
+                {
+                  borderColor: colors.loginInputBorder,
+                  backgroundColor: colors.loginInputBg,
+                },
               ]}
             >
-              <Feather name="lock" size={18} color="#0a0a0a" />
+              <Feather name="lock" size={18} color={colors.loginMuted} />
               <TextInput
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#9a9aa0"
+                placeholderTextColor={colors.loginPlaceholder}
                 secureTextEntry={!showPassword}
-                style={styles.input}
+                style={[styles.input, { color: colors.text }]}
               />
               <Pressable
                 onPress={() => setShowPassword((v) => !v)}
@@ -178,7 +215,7 @@ export default function LoginScreen() {
                 <Feather
                   name={showPassword ? "eye-off" : "eye"}
                   size={18}
-                  color="#5a5a60"
+                  color={colors.loginMuted}
                 />
               </Pressable>
             </View>
@@ -203,7 +240,7 @@ export default function LoginScreen() {
           </Pressable>
 
           <View style={styles.registerRow}>
-            <Text style={{ color: "#5a5a60", fontFamily: "Inter_400Regular" }}>
+            <Text style={{ color: colors.loginMuted, fontFamily: "Inter_400Regular" }}>
               ჯერ არ გაქვს ანგარიში?
             </Text>
             <Pressable
@@ -223,6 +260,21 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <View
+        pointerEvents="none"
+        style={[
+          styles.poweredWrap,
+          { paddingBottom: Math.max(insets.bottom, 12) + 8 },
+        ]}
+      >
+        <Text style={[styles.poweredLabel, { color: colors.loginMuted }]}>
+          powered By     
+          <Text style={[styles.poweredBrand, { color: colors.brandRed }]}>
+            LaSheX
+          </Text>
+        </Text>
+      </View>
     </View>
   );
 }
@@ -243,8 +295,6 @@ const glyphStyles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#0a0a0a",
   },
   text: {
     fontFamily: "Inter_700Bold",
@@ -258,35 +308,22 @@ const styles = StyleSheet.create({
   loader: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: {
     paddingHorizontal: 24,
-    paddingBottom: 48,
     gap: 18,
   },
   heroBlock: {
     alignItems: "center",
-    marginTop: 18,
-    marginBottom: 6,
-    gap: 10,
+    marginTop: 8,
+    marginBottom: 18,
+    gap: 14,
   },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
+  welcomeRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
   },
-  badgeText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    letterSpacing: 2,
-  },
-  title: {
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-  },
-  subtitle: {
+  welcomeText: {
     fontSize: 14,
-    textAlign: "center",
-    fontFamily: "Inter_400Regular",
-    maxWidth: 320,
+    letterSpacing: 2,
+    fontFamily: "Inter_500Medium",
   },
   googleBtn: {
     flexDirection: "row",
@@ -296,14 +333,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderRadius: 14,
     paddingVertical: 14,
-    backgroundColor: "#ffffff",
   },
   googleIconWrap: {
     alignItems: "center",
     justifyContent: "center",
   },
   googleText: {
-    color: "#0a0a0a",
+    color: "#f4f4f6",
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
   },
@@ -318,9 +354,8 @@ const styles = StyleSheet.create({
   fieldGroup: { gap: 8 },
   label: {
     fontSize: 12,
-    color: "#0a0a0a",
     fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
   inputWrap: {
@@ -336,7 +371,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontFamily: "Inter_500Medium",
-    color: "#0a0a0a",
   },
   primaryBtn: {
     marginTop: 6,
@@ -356,5 +390,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 14,
+  },
+  poweredWrap: {
+    position: "absolute",
+    left: 16,
+    bottom: 0,
+  },
+  poweredLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  poweredBrand: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+    letterSpacing: 1.5,
   },
 });

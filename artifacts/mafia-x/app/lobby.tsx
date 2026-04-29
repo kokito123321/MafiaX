@@ -21,6 +21,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandHeader } from "@/components/BrandHeader";
+import { ProfilePanel } from "@/components/ProfilePanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -57,6 +58,7 @@ export default function LobbyScreen() {
   const { user, logout } = useAuth();
 
   const [hostSlot, setHostSlot] = useState<number | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [camPerm, requestCamPerm] = useCameraPermissions();
   const [micPerm, requestMicPerm] = useMicrophonePermissions();
 
@@ -159,8 +161,8 @@ export default function LobbyScreen() {
     ]);
   }, [draft, user]);
 
-  const handleLogout = useCallback(() => {
-    Alert.alert("გასვლა", "გსურს გასვლა ანგარიშიდან?", [
+  const handleBack = useCallback(() => {
+    Alert.alert("დატოვება", "გსურს გასვლა და შესვლის გვერდზე დაბრუნება?", [
       { text: "გაუქმება", style: "cancel" },
       {
         text: "გასვლა",
@@ -171,6 +173,12 @@ export default function LobbyScreen() {
         },
       },
     ]);
+  }, [logout]);
+
+  const handleLogoutFromPanel = useCallback(async () => {
+    setProfileOpen(false);
+    await logout();
+    router.replace("/");
   }, [logout]);
 
   const slots = useMemo(
@@ -184,7 +192,8 @@ export default function LobbyScreen() {
 
   if (!user) return null;
 
-  const headerOffset = Platform.OS === "ios" ? 0 : 0;
+  const initial = (user.nickname.charAt(0) ?? "U").toUpperCase();
+  const topPad = Math.max(insets.top, 16);
 
   return (
     <View
@@ -193,38 +202,46 @@ export default function LobbyScreen() {
         { backgroundColor: colors.lobbyBackground },
       ]}
     >
-      <BrandHeader
-        background={colors.lobbyBackground}
-        variant="dark"
-        borderColor={colors.brandPurple}
-      />
-      <View style={styles.toolbar}>
-        <View style={styles.userPill}>
-          <View
-            style={[
-              styles.dot,
-              { backgroundColor: colors.brandRed },
-            ]}
-          />
-          <Text style={styles.userPillText} numberOfLines={1}>
-            {user.nickname}
-          </Text>
-        </View>
+      <View style={[styles.topBar, { paddingTop: topPad + 8 }]}>
         <Pressable
-          onPress={handleLogout}
-          hitSlop={10}
+          onPress={handleBack}
+          hitSlop={12}
           style={({ pressed }) => [
-            styles.iconBtn,
-            { opacity: pressed ? 0.7 : 1 },
+            styles.backBtn,
+            {
+              backgroundColor: "rgba(0,0,0,0.18)",
+              borderColor: colors.brandPurple,
+              opacity: pressed ? 0.7 : 1,
+            },
           ]}
         >
-          <Feather name="log-out" size={18} color="#1a1a1a" />
+          <Feather name="arrow-left" size={18} color="#fff" />
+        </Pressable>
+
+        <BrandHeader
+          background="transparent"
+          variant="dark"
+          style={styles.headerInline}
+        />
+
+        <Pressable
+          onPress={() => setProfileOpen(true)}
+          hitSlop={12}
+          style={({ pressed }) => [
+            styles.avatarBtn,
+            {
+              borderColor: colors.brandRed,
+              backgroundColor: colors.brandPurple,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Text style={styles.avatarBtnText}>{initial}</Text>
         </Pressable>
       </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "padding"}
-        keyboardVerticalOffset={headerOffset}
         style={{ flex: 1 }}
       >
         <View style={styles.body}>
@@ -342,6 +359,13 @@ export default function LobbyScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <ProfilePanel
+        visible={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        nickname={user.nickname}
+        onLogout={handleLogoutFromPanel}
+      />
     </View>
   );
 }
@@ -472,40 +496,43 @@ function ChatBubble({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  toolbar: {
+  topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
   },
-  userPill: {
-    flexDirection: "row",
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.18)",
-    maxWidth: 220,
+    justifyContent: "center",
+    borderWidth: 1.5,
+  },
+  headerInline: {
+    flex: 1,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  avatarBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+  },
+  avatarBtnText: {
+    color: "#fff",
+    fontFamily: "Inter_700Bold",
+    fontSize: 14,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  userPillText: {
-    color: "#fff",
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 13,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.6)",
   },
   body: {
     flex: 1,
