@@ -10,10 +10,10 @@ import React, {
 } from "react";
 
 import { useAuth } from "./AuthContext";
+import { apiFetch } from "@/lib/api";
 
-const BALANCE_KEY = (uid: string) => `@mafia-x/balance/${uid}`;
+const TOKEN_KEY = "@mafia-x/token";
 const GIFT_KEY = (uid: string) => `@mafia-x/gift-claimed/${uid}`;
-const ROOMS_KEY = "@mafia-x/rooms";
 
 const REGISTRATION_GIFT = 200;
 
@@ -43,156 +43,168 @@ const SEED_ROOMS: Room[] = [
   },
 ];
 
+interface ApiRoom {
+  id: string;
+  name: string;
+  hostId: string;
+  hostName: string;
+  capacity: number;
+  status: string;
+  memberCount: number;
+}
+
+interface AuthUserResponse {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string | null;
+  balance: number;
+  level: number;
+  xp: number;
+  createdAt: string;
+}
+
 interface GameContextValue {
   balance: number;
   rooms: Room[];
   showGiftModal: boolean;
   giftAmount: number;
   dismissGiftModal: () => void;
-  createRoom: (name?: string) => Room;
+  createRoom: (name?: string) => Promise<Room>;
   addCoins: (n: number) => Promise<void>;
-  spendCoins: (n: number) => Promise<boolean>;
+  joinRoom: (roomId: string, password?: string) => Promise<void>;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
 
-function makeId() {
-  return Date.now().toString() + Math.random().toString(36).slice(2, 9);
+function mapRoom(room: ApiRoom): Room {
+  return {
+    id: room.id,
+    name: room.name || `${room.hostName}'s Table`,
+    hostNickname: room.hostName,
+    players: room.memberCount,
+    capacity: room.capacity,
+    entryFee: ROOM_ENTRY_FEE,
+    region: "Georgia",
+    isLive: room.status === "live",
+  };
 }
 
-async function readRooms(): Promise<Room[]> {
-  const raw = await AsyncStorage.getItem(ROOMS_KEY);
-  if (!raw) return SEED_ROOMS;
-  try {
-    const parsed = JSON.parse(raw) as Room[];
-    return Array.isArray(parsed) && parsed.length ? parsed : SEED_ROOMS;
-  } catch {
-    return SEED_ROOMS;
+async function getToken(): Promise<string | null> {
+  return AsyncStorage.getItem(TOKEN_KEY);
+}
+
+async function authFetch<T>(path: string, init: RequestInit = {}) {
+  const token = await getToken();
+  if (!token) {
+    throw new Error("No auth token available");
   }
-}
-
-async function writeRooms(rooms: Room[]) {
-  await AsyncStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
+  return apiFetch<T>(path, {
+    ...init,
+    headers: {
+      ...(init.headers ?? {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  const [balance, setBalance] = useState(0);
+  const { user, refreshUser } = useAuth();
   const [rooms, setRooms] = useState<Room[]>(SEED_ROOMS);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [giftAmount, setGiftAmount] = useState(REGISTRATION_GIFT);
   const lastUserIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const r = await readRooms();
-      setRooms(r);
-    })();
+  const loadRooms = useCallback(async () => {
+    const response = await authFetch<{ rooms: ApiRoom[] }>("/rooms");
+    setRooms(response.rooms.map(mapRoom));
   }, []);
 
   useEffect(() => {
     if (!user) {
-      setBalance(0);
+      setRooms(SEED_ROOMS);
+      setShowGiftModal(false);
       lastUserIdRef.current = null;
       return;
     }
-    if (lastUserIdRef.current === user.id) return;
+
+    if (lastUserIdRef.current === user.id) {
+      return;
+    }
+
     lastUserIdRef.current = user.id;
 
     (async () => {
-      const giftRaw = await AsyncStorage.getItem(GIFT_KEY(user.id));
-      const balRaw = await AsyncStorage.getItem(BALANCE_KEY(user.id));
-      let bal = balRaw ? parseInt(balRaw, 10) : 0;
-      if (!Number.isFinite(bal)) bal = 0;
-
-      if (giftRaw !== "1") {
-        bal += REGISTRATION_GIFT;
-        await AsyncStorage.setItem(GIFT_KEY(user.id), "1");
-        await AsyncStorage.setItem(BALANCE_KEY(user.id), String(bal));
-        setGiftAmount(REGISTRATION_GIFT);
-        setShowGiftModal(true);
+      try {
+        await loadRooms();
+      } catch {
+        setRooms(SEED_ROOMS);
       }
-      setBalance(bal);
+
+      const giftRaw = await AsyncStorage.getItem(GIFT_KEY(user.id));
+      if (giftRaw !== "1") {
+        setGiftAmount(user.balance);
+        setShowGiftModal(true);
+        await AsyncStorage.setItem(GIFT_KEY(user.id), "1");
+      }
     })();
-  }, [user]);
-
-  const persistBalance = useCallback(
-    async (uid: string, value: number) => {
-      await AsyncStorage.setItem(BALANCE_KEY(uid), String(value));
-    },
-    [],
-  );
-
-  const addCoins = useCallback(
-    async (n: number) => {
-      if (!user) return;
-      setBalance((prev) => {
-        const next = Math.max(0, prev + n);
-        void persistBalance(user.id, next);
-        return next;
-      });
-    },
-    [user, persistBalance],
-  );
-
-  const spendCoins = useCallback(
-    async (n: number) => {
-      if (!user) return false;
-      if (balance < n) return false;
-      const next = balance - n;
-      setBalance(next);
-      await persistBalance(user.id, next);
-      return true;
-    },
-    [user, balance, persistBalance],
-  );
+  }, [user, loadRooms]);
 
   const createRoom = useCallback<GameContextValue["createRoom"]>(
-    (name) => {
-      const hostNickname = user?.nickname ?? "Guest";
-      const room: Room = {
-        id: makeId(),
-        name: name?.trim() || `${hostNickname}'s Table`,
-        hostNickname,
-        players: 1,
-        capacity: 10,
-        entryFee: ROOM_ENTRY_FEE,
-        region: "Tbilisi",
-        isLive: true,
-      };
-      setRooms((prev) => {
-        const next = [room, ...prev];
-        void writeRooms(next);
-        return next;
+    async (name) => {
+      const response = await authFetch<{ room: ApiRoom }>("/rooms", {
+        method: "POST",
+        body: JSON.stringify({
+          name: name?.trim() || `${user?.nickname ?? "Guest"}'s Table`,
+          isPrivate: false,
+          capacity: 10,
+        }),
       });
-      return room;
+      await loadRooms();
+      await refreshUser();
+      return mapRoom(response.room);
     },
-    [user],
+    [loadRooms, refreshUser, user?.nickname],
+  );
+
+  const joinRoom = useCallback<GameContextValue["joinRoom"]>(
+    async (roomId, password) => {
+      await authFetch<{ ok: true; seatNumber: number }>(`/rooms/${roomId}/join`, {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      await loadRooms();
+      await refreshUser();
+    },
+    [loadRooms, refreshUser],
+  );
+
+  const addCoins = useCallback<GameContextValue["addCoins"]>(
+    async (n) => {
+      if (!user) return;
+      await authFetch<{ user: AuthUserResponse }>("/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify({ balance: user.balance + n }),
+      });
+      await refreshUser();
+    },
+    [refreshUser, user],
   );
 
   const dismissGiftModal = useCallback(() => setShowGiftModal(false), []);
 
   const value = useMemo<GameContextValue>(
     () => ({
-      balance,
+      balance: user?.balance ?? 0,
       rooms,
       showGiftModal,
       giftAmount,
       dismissGiftModal,
       createRoom,
       addCoins,
-      spendCoins,
+      joinRoom,
     }),
-    [
-      balance,
-      rooms,
-      showGiftModal,
-      giftAmount,
-      dismissGiftModal,
-      createRoom,
-      addCoins,
-      spendCoins,
-    ],
+    [user?.balance, rooms, showGiftModal, giftAmount, dismissGiftModal, createRoom, addCoins, joinRoom],
   );
 
   return (

@@ -116,16 +116,18 @@ router.patch("/me", requireAuth, async (req, res) => {
     .object({
       name: nameSchema.optional(),
       avatar: z.string().max(500_000).nullable().optional(),
+      balance: z.number().int().min(0).optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });
     return;
   }
-  const { name, avatar } = parsed.data;
+  const { name, avatar, balance } = parsed.data;
   const update: Record<string, unknown> = {};
   if (name !== undefined) update["name"] = name.trim();
   if (avatar !== undefined) update["avatar"] = avatar;
+  if (balance !== undefined) update["balance"] = balance;
   if (Object.keys(update).length === 0) {
     res.json({ user: publicUser(req.user!) });
     return;

@@ -56,9 +56,6 @@ export default function RegisterScreen() {
     }
     setSubmitting(true);
     try {
-      if (Platform.OS !== "web") {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
       await register({
         nickname,
         email,
@@ -66,10 +63,23 @@ export default function RegisterScreen() {
         gender,
         password,
       });
+      if (Platform.OS !== "web") {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      Alert.alert(t(S.common.success), "რეგისტრაცია წარმატებით დასრულდა");
       router.replace("/rooms");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : t(S.common.error);
-      Alert.alert(t(S.common.error), msg);
+      let message = t(S.common.error);
+      if (e instanceof Error) {
+        if (e.message === "email_in_use") {
+          message = "ამ მეილზე უკვე არის ანგარიში";
+        } else if (e.message === "invalid_input") {
+          message = "მიუთითეთ სწორი ინფორმაცია";
+        } else {
+          message = e.message;
+        }
+      }
+      Alert.alert(t(S.common.error), message);
     } finally {
       setSubmitting(false);
     }

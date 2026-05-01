@@ -8,8 +8,10 @@ import React, {
   useState,
 } from "react";
 
-const USERS_KEY = "@mafia-x/users";
+import { apiFetch, ApiError } from "@/lib/api";
+
 const SESSION_KEY = "@mafia-x/session";
+const TOKEN_KEY = "@mafia-x/token";
 
 export type Gender = "male" | "female";
 
@@ -17,15 +19,26 @@ export interface User {
   id: string;
   nickname: string;
   email: string;
-  age: number;
-  gender: Gender;
-  password: string;
-  provider: "email" | "google";
   avatarUri?: string;
+  balance: number;
+  level: number;
+  xp: number;
   createdAt: string;
+  provider?: "email" | "google";
 }
 
-export type PublicUser = Omit<User, "password">;
+export type PublicUser = User;
+
+interface ApiUser {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string | null;
+  balance: number;
+  level: number;
+  xp: number;
+  createdAt: string;
+}
 
 interface RegisterPayload {
   nickname: string;
@@ -36,6 +49,12 @@ interface RegisterPayload {
   provider?: "email" | "google";
 }
 
+interface AuthResponse {
+  token: string;
+  user: ApiUser;
+  gift?: number;
+}
+
 interface AuthContextValue {
   user: PublicUser | null;
   initializing: boolean;
@@ -44,151 +63,181 @@ interface AuthContextValue {
   register: (payload: RegisterPayload) => Promise<PublicUser>;
   logout: () => Promise<void>;
   setAvatar: (uri: string | null) => Promise<void>;
+  refreshUser: () => Promise<PublicUser | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function makeId() {
-  return Date.now().toString() + Math.random().toString(36).slice(2, 9);
+function mapApiUser(user: ApiUser): User {
+  return {
+    id: user.id,
+    nickname: user.name,
+    email: user.email,
+    avatarUri: user.avatar ?? undefined,
+    balance: user.balance,
+    level: user.level,
+    xp: user.xp,
+    createdAt: user.createdAt,
+    provider: "email",
+  };
 }
 
-function strip(u: User): PublicUser {
-  const { password: _password, ...rest } = u;
-  return rest;
-}
-
-async function readUsers(): Promise<User[]> {
-  const raw = await AsyncStorage.getItem(USERS_KEY);
-  if (!raw) return [];
+async function loadSession(): Promise<{ token: string; user: PublicUser } | null> {
+  const token = await AsyncStorage.getItem(TOKEN_KEY);
+  const raw = await AsyncStorage.getItem(SESSION_KEY);
+  if (!token || !raw) return null;
   try {
-    return JSON.parse(raw) as User[];
+    return { token, user: JSON.parse(raw) as PublicUser };
   } catch {
-    return [];
+    return null;
   }
-}
-
-async function writeUsers(users: User[]) {
-  await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [initializing, setInitializing] = useState<boolean>(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(SESSION_KEY);
-        if (raw) {
-          setUser(JSON.parse(raw) as PublicUser);
+        const saved = await loadSession();
+        if (saved) {
+          const response = await apiFetch<{ user: ApiUser }>("/auth/me", {
+            headers: {
+              Authorization: `Bearer ${saved.token}`,
+            },
+          });
+          const mapped = mapApiUser(response.user);
+          setUser(mapped);
+          setToken(saved.token);
+          await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(mapped));
+          await AsyncStorage.setItem(TOKEN_KEY, saved.token);
         }
       } catch {
-        // ignore
+        await AsyncStorage.removeItem(SESSION_KEY);
+        await AsyncStorage.removeItem(TOKEN_KEY);
+        setUser(null);
+        setToken(null);
       } finally {
         setInitializing(false);
       }
     })();
   }, []);
 
-  const persistSession = useCallback(async (next: PublicUser | null) => {
-    setUser(next);
-    if (next) {
-      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next));
-    } else {
-      await AsyncStorage.removeItem(SESSION_KEY);
-    }
-  }, []);
+  const persistSession = useCallback(
+    async (next: PublicUser | null, nextToken: string | null = null) => {
+      setUser(next);
+      setToken(nextToken);
+      if (next && nextToken) {
+        await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next));
+        await AsyncStorage.setItem(TOKEN_KEY, nextToken);
+      } else {
+        await AsyncStorage.removeItem(SESSION_KEY);
+        await AsyncStorage.removeItem(TOKEN_KEY);
+      }
+    },
+    [],
+  );
+
+  const refreshUser = useCallback(async () => {
+    if (!token) return null;
+    const response = await apiFetch<{ user: ApiUser }>("/auth/me", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const mapped = mapApiUser(response.user);
+    await persistSession(mapped, token);
+    return mapped;
+  }, [persistSession, token]);
 
   const register = useCallback<AuthContextValue["register"]>(
     async (payload) => {
-      const users = await readUsers();
-      const exists = users.find(
-        (u) => u.email.toLowerCase() === payload.email.toLowerCase(),
-      );
-      if (exists) {
-        throw new Error("ამ მეილზე უკვე არსებობს ანგარიში");
-      }
-      const newUser: User = {
-        id: makeId(),
-        nickname: payload.nickname.trim(),
-        email: payload.email.trim().toLowerCase(),
-        age: payload.age,
-        gender: payload.gender,
-        password: payload.password,
-        provider: payload.provider ?? "email",
-        createdAt: new Date().toISOString(),
-      };
-      await writeUsers([...users, newUser]);
-      const pub = strip(newUser);
-      await persistSession(pub);
-      return pub;
+      const response = await apiFetch<AuthResponse>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          name: payload.nickname.trim(),
+          email: payload.email.trim().toLowerCase(),
+          password: payload.password,
+        }),
+      });
+      const mapped = mapApiUser(response.user);
+      await persistSession(mapped, response.token);
+      return mapped;
     },
     [persistSession],
   );
 
   const login = useCallback<AuthContextValue["login"]>(
     async (email, password) => {
-      const users = await readUsers();
-      const found = users.find(
-        (u) => u.email.toLowerCase() === email.trim().toLowerCase(),
-      );
-      if (!found || found.password !== password) {
-        throw new Error("მცდარი მეილი ან პაროლი");
-      }
-      const pub = strip(found);
-      await persistSession(pub);
-      return pub;
+      const response = await apiFetch<AuthResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      });
+      const mapped = mapApiUser(response.user);
+      await persistSession(mapped, response.token);
+      return mapped;
     },
     [persistSession],
   );
 
   const loginWithGoogle = useCallback<AuthContextValue["loginWithGoogle"]>(
     async () => {
-      const users = await readUsers();
       const demoEmail = "google.guest@mafia-x.app";
-      let found = users.find((u) => u.email === demoEmail);
-      if (!found) {
-        const newUser: User = {
-          id: makeId(),
-          nickname: "GoogleGuest",
-          email: demoEmail,
-          age: 21,
-          gender: "male",
-          password: "",
-          provider: "google",
-          createdAt: new Date().toISOString(),
-        };
-        await writeUsers([...users, newUser]);
-        found = newUser;
+      const demoPassword = "google-guest-123";
+      try {
+        return await login(demoEmail, demoPassword);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          return await register({
+            nickname: "GoogleGuest",
+            email: demoEmail,
+            age: 21,
+            gender: "male",
+            password: demoPassword,
+            provider: "google",
+          });
+        }
+        throw error;
       }
-      const pub = strip(found);
-      await persistSession(pub);
-      return pub;
     },
-    [persistSession],
+    [login, register],
   );
 
   const logout = useCallback(async () => {
-    await persistSession(null);
-  }, [persistSession]);
+    if (token) {
+      try {
+        await apiFetch("/auth/logout", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch {
+        // ignore logout errors
+      }
+    }
+    await persistSession(null, null);
+  }, [persistSession, token]);
 
   const setAvatar = useCallback<AuthContextValue["setAvatar"]>(
     async (uri) => {
-      if (!user) return;
-      const users = await readUsers();
-      const idx = users.findIndex((u) => u.id === user.id);
-      if (idx >= 0) {
-        const updated: User = {
-          ...users[idx]!,
-          avatarUri: uri ?? undefined,
-        };
-        const next = [...users];
-        next[idx] = updated;
-        await writeUsers(next);
-        await persistSession(strip(updated));
-      }
+      if (!token || !user) return;
+      const response = await apiFetch<{ user: ApiUser }>("/auth/me", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ avatar: uri ?? null }),
+      });
+      const mapped = mapApiUser(response.user);
+      await persistSession(mapped, token);
     },
-    [user, persistSession],
+    [token, user, persistSession],
   );
 
   const value = useMemo<AuthContextValue>(
@@ -200,8 +249,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register,
       logout,
       setAvatar,
+      refreshUser,
     }),
-    [user, initializing, login, loginWithGoogle, register, logout, setAvatar],
+    [user, initializing, login, loginWithGoogle, register, logout, setAvatar, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
