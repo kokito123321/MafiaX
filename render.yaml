@@ -1,0 +1,15 @@
+# Render Blueprint — sync or copy Build/Start into an existing Web Service.
+# Secrets (DATABASE_URL, LIVEKIT_*): set only in Dashboard → Environment (not here).
+
+services:
+  - type: web
+    name: mafiax-api
+    runtime: node
+    plan: free
+    buildCommand: >-
+      corepack enable && corepack prepare pnpm@9.15.9 --activate
+      && pnpm install --frozen-lockfile && pnpm run build:api-server
+    startCommand: pnpm --filter @workspace/api-server run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.1

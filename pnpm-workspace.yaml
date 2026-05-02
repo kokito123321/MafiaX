@@ -24,8 +24,12 @@
 #     - react
 #     - typescript
 #
-# ============================================================================
-minimumReleaseAge: 1440
+# ----------------------------------------------------------------------------
+# CI / Render: strict release-age (1440) often makes `pnpm install` fail on
+# hosts that resolve “published at” metadata differently. Versions are pinned
+# by pnpm-lock.yaml; lowering this enables reproducible Linux builds.
+# ----------------------------------------------------------------------------
+minimumReleaseAge: 0
 
 minimumReleaseAgeExclude:
   # Exclude @replit scoped packages from the minimum release age check.
