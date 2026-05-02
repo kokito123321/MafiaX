@@ -21,6 +21,7 @@
       }
     },
     "android": {
+      "package": "com.lashex.mafiax",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"

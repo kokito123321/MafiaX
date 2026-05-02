@@ -2,6 +2,7 @@
 
 # compiled output
 dist
+dist-test-android
 tmp
 out-tsc
 *.tsbuildinfo

@@ -29,6 +29,7 @@ export interface Room {
 }
 
 export const ROOM_ENTRY_FEE = 1;
+export const ROOM_CAPACITY = 11;
 
 const SEED_ROOMS: Room[] = [
   {
@@ -36,7 +37,7 @@ const SEED_ROOMS: Room[] = [
     name: "example room",
     hostNickname: "Example Host",
     players: 4,
-    capacity: 10,
+    capacity: ROOM_CAPACITY,
     entryFee: ROOM_ENTRY_FEE,
     region: "Tbilisi",
     isLive: true,
@@ -70,9 +71,10 @@ interface GameContextValue {
   showGiftModal: boolean;
   giftAmount: number;
   dismissGiftModal: () => void;
+  refreshRooms: () => Promise<void>;
   createRoom: (name?: string) => Promise<Room>;
   addCoins: (n: number) => Promise<void>;
-  joinRoom: (roomId: string, password?: string) => Promise<void>;
+  joinRoom: (roomId: string, password?: string) => Promise<Room | null>;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -157,7 +159,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           name: name?.trim() || `${user?.nickname ?? "Guest"}'s Table`,
           isPrivate: false,
-          capacity: 10,
         }),
       });
       await loadRooms();
@@ -175,8 +176,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       });
       await loadRooms();
       await refreshUser();
+      return rooms.find((room) => room.id === roomId) ?? null;
     },
-    [loadRooms, refreshUser],
+    [loadRooms, refreshUser, rooms],
   );
 
   const addCoins = useCallback<GameContextValue["addCoins"]>(
@@ -200,11 +202,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       showGiftModal,
       giftAmount,
       dismissGiftModal,
+      refreshRooms: loadRooms,
       createRoom,
       addCoins,
       joinRoom,
     }),
-    [user?.balance, rooms, showGiftModal, giftAmount, dismissGiftModal, createRoom, addCoins, joinRoom],
+    [user?.balance, rooms, showGiftModal, giftAmount, dismissGiftModal, loadRooms, createRoom, addCoins, joinRoom],
   );
 
   return (

@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   Alert,
@@ -39,6 +39,7 @@ export default function RoomsScreen() {
     showGiftModal,
     giftAmount,
     dismissGiftModal,
+    refreshRooms,
     createRoom,
     joinRoom,
   } = useGame();
@@ -49,6 +50,16 @@ export default function RoomsScreen() {
       router.replace("/");
     }
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return undefined;
+      refreshRooms().catch(() => {
+        // Keep the existing list if the API is temporarily unavailable.
+      });
+      return undefined;
+    }, [refreshRooms, user]),
+  );
 
   const showInsufficientBalance = useCallback(() => {
     Alert.alert(
@@ -82,7 +93,7 @@ export default function RoomsScreen() {
       }
       try {
         await joinRoom(room.id);
-        router.push("/lobby");
+        router.push({ pathname: "/lobby", params: { roomId: room.id } });
       } catch (error) {
         if (
           error instanceof ApiError &&
@@ -102,8 +113,8 @@ export default function RoomsScreen() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     try {
-      await createRoom();
-      router.push("/lobby");
+      const room = await createRoom();
+      router.push({ pathname: "/lobby", params: { roomId: room.id } });
     } catch (error) {
       if (
         error instanceof ApiError &&

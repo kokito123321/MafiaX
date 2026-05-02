@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   CameraView,
   useCameraPermissions,
@@ -6,7 +7,7 @@ import {
 } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, {
   useCallback,
   useEffect,
@@ -27,14 +28,17 @@ import {
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { io, type Socket } from "socket.io-client";
 
 import { BrandHeader } from "@/components/BrandHeader";
 import { ProfilePanel } from "@/components/ProfilePanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useColors } from "@/hooks/useColors";
+import { apiFetch, API_ORIGIN, SOCKET_PATH } from "@/lib/api";
 
 const SLOT_COUNT = 11;
+const TOKEN_KEY = "@mafia-x/token";
 
 interface ChatMsg {
   id: string;
@@ -61,6 +65,55 @@ interface Seat {
   occupant: Occupant | null;
 }
 
+interface ApiSeatOccupant {
+  userId: string;
+  name: string;
+  avatar: string | null;
+  seatNumber: number;
+  isMuted: boolean;
+  isBlocked: boolean;
+  hasCamera: boolean;
+  hasMic: boolean;
+}
+
+interface ApiRoomState {
+  roomId: string;
+  hostId: string;
+  status: string;
+  capacity: number;
+  occupants: ApiSeatOccupant[];
+}
+
+interface ApiChatMessage {
+  id: number;
+  roomId: string;
+  userId: string | null;
+  authorName: string;
+  text: string;
+  isSystem: boolean;
+  createdAt: string;
+}
+
+interface ServerToClientEvents {
+  "room:state": (state: ApiRoomState) => void;
+  "room:message": (message: ApiChatMessage) => void;
+  "room:kicked": (payload: { reason?: string }) => void;
+}
+
+interface ClientToServerEvents {
+  "room:join": (
+    payload: { roomId: string },
+    cb: (resp: { ok: boolean; error?: string; state?: ApiRoomState }) => void,
+  ) => void;
+  "room:leave": (payload: { roomId: string }) => void;
+  "room:send": (
+    payload: { roomId: string; text: string },
+    cb: (resp: { ok: boolean; error?: string }) => void,
+  ) => void;
+}
+
+type LobbySocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+
 const FAKE_COLORS = [
   "#7a4d9e",
   "#cf3a4f",
@@ -78,22 +131,78 @@ function makeId() {
   return Date.now().toString() + Math.random().toString(36).slice(2, 9);
 }
 
+function makeEmptySeats(count = SLOT_COUNT): Seat[] {
+  return Array.from({ length: count }, (_, i) => ({
+    number: i + 1,
+    occupant: null,
+  }));
+}
+
+function occupantColor(userId: string, seatNumber: number) {
+  let hash = seatNumber;
+  for (const ch of userId) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+  return FAKE_COLORS[hash % FAKE_COLORS.length] ?? "#7a4d9e";
+}
+
+function mapRoomStateToSeats(state: ApiRoomState): Seat[] {
+  const seats = makeEmptySeats(state.capacity || SLOT_COUNT);
+  for (const occ of state.occupants) {
+    const index = occ.seatNumber - 1;
+    if (!seats[index]) continue;
+    seats[index] = {
+      number: occ.seatNumber,
+      occupant: {
+        id: occ.userId,
+        name: occ.name,
+        initial: (occ.name.charAt(0) || "?").toUpperCase(),
+        avatarUri: occ.avatar,
+        isHost: occ.userId === state.hostId,
+        hasCamera: occ.hasCamera,
+        hasMic: occ.hasMic,
+        micMuted: occ.isMuted,
+        color: occupantColor(occ.userId, occ.seatNumber),
+      },
+    };
+  }
+  return seats;
+}
+
+function mapApiMessage(message: ApiChatMessage): ChatMsg {
+  return {
+    id: `api-${message.id}`,
+    author: message.authorName,
+    text: message.text,
+    ts: new Date(message.createdAt).getTime(),
+    system: message.isSystem,
+  };
+}
+
+async function getAuthHeaders() {
+  const token = await AsyncStorage.getItem(TOKEN_KEY);
+  if (!token) throw new Error("unauthorized");
+  return { Authorization: `Bearer ${token}` };
+}
+
 export default function LobbyScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const { t, S } = useLanguage();
+  const params = useLocalSearchParams();
+  const roomIdParam = params["roomId"];
+  const roomId = Array.isArray(roomIdParam)
+    ? roomIdParam[0]
+    : typeof roomIdParam === "string"
+      ? roomIdParam
+      : null;
+  const isBackendRoom = !!roomId && roomId !== "seed-example";
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [camPerm, requestCamPerm] = useCameraPermissions();
   const [micPerm, requestMicPerm] = useMicrophonePermissions();
 
-  const [seats, setSeats] = useState<Seat[]>(() =>
-    Array.from({ length: SLOT_COUNT }, (_, i) => ({
-      number: i + 1,
-      occupant: null,
-    })),
-  );
+  const socketRef = useRef<LobbySocket | null>(null);
+  const [seats, setSeats] = useState<Seat[]>(() => makeEmptySeats());
   const [armedSeat, setArmedSeat] = useState<number | null>(null);
   const [seatSelector, setSeatSelector] = useState<number | null>(null);
   const [moderation, setModeration] = useState<number | null>(null);
@@ -125,9 +234,95 @@ export default function LobbyScreen() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!user || !isBackendRoom || !roomId) return;
+
+    const activeRoomId = roomId;
+    let cancelled = false;
+    let socket: LobbySocket | null = null;
+
+    async function connectRoom() {
+      try {
+        const headers = await getAuthHeaders();
+        const [stateResp, messagesResp] = await Promise.all([
+          apiFetch<{ state: ApiRoomState }>(`/rooms/${activeRoomId}`, { headers }),
+          apiFetch<{ messages: ApiChatMessage[] }>(`/rooms/${activeRoomId}/messages`, {
+            headers,
+          }),
+        ]);
+        if (cancelled) return;
+
+        setSeats(mapRoomStateToSeats(stateResp.state));
+        const apiMessages = messagesResp.messages
+          .map(mapApiMessage)
+          .reverse();
+        setMessages(
+          apiMessages.length > 0
+            ? apiMessages
+            : [
+                {
+                  id: "sys-welcome",
+                  author: "system",
+                  text: t(S.lobby.welcome),
+                  ts: Date.now(),
+                  system: true,
+                },
+              ],
+        );
+
+        const token = headers.Authorization.replace("Bearer ", "");
+        socket = io(API_ORIGIN, {
+          path: SOCKET_PATH,
+          auth: { token },
+          transports: ["websocket", "polling"],
+        });
+        socketRef.current = socket;
+
+        socket.on("connect", () => {
+          socket?.emit("room:join", { roomId: activeRoomId }, (resp) => {
+            if (!resp.ok || !resp.state) return;
+            setSeats(mapRoomStateToSeats(resp.state));
+          });
+        });
+
+        socket.on("room:state", (state) => {
+          setSeats(mapRoomStateToSeats(state));
+        });
+
+        socket.on("room:message", (message) => {
+          const mapped = mapApiMessage(message);
+          setMessages((prev) =>
+            prev.some((m) => m.id === mapped.id) ? prev : [mapped, ...prev],
+          );
+        });
+
+        socket.on("room:kicked", () => {
+          router.replace("/rooms");
+        });
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : t(S.common.error);
+          Alert.alert(t(S.common.error), message);
+          router.replace("/rooms");
+        }
+      }
+    }
+
+    connectRoom();
+
+    return () => {
+      cancelled = true;
+      socket?.emit("room:leave", { roomId: activeRoomId });
+      socket?.disconnect();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+    };
+  }, [isBackendRoom, roomId, user, t, S]);
+
   // Auto-occupy seat 1 with current user as host
   useEffect(() => {
-    if (!user) return;
+    if (!user || isBackendRoom) return;
     setSeats((prev) => {
       if (prev[0]?.occupant) return prev;
       const next = [...prev];
@@ -147,11 +342,11 @@ export default function LobbyScreen() {
       };
       return next;
     });
-  }, [user]);
+  }, [isBackendRoom, user]);
 
   // Keep host avatar/name in sync if user updates profile
   useEffect(() => {
-    if (!user) return;
+    if (!user || isBackendRoom) return;
     setSeats((prev) =>
       prev.map((s) =>
         s.occupant && s.occupant.isHost
@@ -167,7 +362,7 @@ export default function LobbyScreen() {
           : s,
       ),
     );
-  }, [user?.avatarUri, user?.nickname, user]);
+  }, [isBackendRoom, user?.avatarUri, user?.nickname, user]);
 
   const occupiedCount = useMemo(
     () => seats.filter((s) => s.occupant).length,
@@ -221,6 +416,32 @@ export default function LobbyScreen() {
   const swapSeats = useCallback(
     async (a: number, b: number) => {
       if (a === b) return;
+      if (isBackendRoom && roomId) {
+        const from = seats[a - 1]?.occupant;
+        const to = seats[b - 1]?.occupant;
+        if (!from) return;
+        try {
+          const headers = await getAuthHeaders();
+          await apiFetch(`/rooms/${roomId}/moderate`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(
+              to
+                ? { action: "swap", fromUserId: from.id, toUserId: to.id }
+                : { action: "move", userId: from.id, seatNumber: b },
+            ),
+          });
+          if (Platform.OS !== "web") {
+            await Haptics.notificationAsync(
+              Haptics.NotificationFeedbackType.Success,
+            );
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : t(S.common.error);
+          Alert.alert(t(S.common.error), message);
+        }
+        return;
+      }
       setSeats((prev) => {
         const next = [...prev];
         const sa = next[a - 1];
@@ -237,7 +458,7 @@ export default function LobbyScreen() {
       }
       pushSystem(`#${a} ⇄ #${b} — ${t(S.lobby.swapDone)}`);
     },
-    [pushSystem, t, S],
+    [isBackendRoom, roomId, seats, pushSystem, t, S],
   );
 
   const handleSeatPress = useCallback(
@@ -286,6 +507,30 @@ export default function LobbyScreen() {
       const ok = await ensurePerms(withCamera, true);
       if (!ok) return;
 
+      if (isBackendRoom && roomId && user) {
+        try {
+          const headers = await getAuthHeaders();
+          await apiFetch(`/rooms/${roomId}/moderate`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              action: "move",
+              userId: user.id,
+              seatNumber: seatNum,
+              hasCamera: withCamera,
+              hasMic: true,
+            }),
+          });
+          if (Platform.OS !== "web") {
+            await Haptics.selectionAsync();
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : t(S.common.error);
+          Alert.alert(t(S.common.error), message);
+        }
+        return;
+      }
+
       setSeats((prev) => {
         const next = [...prev];
         const target = next[seatNum - 1];
@@ -332,7 +577,7 @@ export default function LobbyScreen() {
         }`,
       );
     },
-    [ensurePerms, pushSystem, t, S],
+    [ensurePerms, isBackendRoom, roomId, user, pushSystem, t, S],
   );
 
   const handleAddDemoPlayer = useCallback(async () => {
@@ -367,9 +612,34 @@ export default function LobbyScreen() {
   const closeModeration = useCallback(() => setModeration(null), []);
 
   const moderationAction = useCallback(
-    (action: "kick" | "mute" | "block" | "ban") => {
+    async (action: "kick" | "mute" | "block" | "ban") => {
       if (moderation === null) return;
       const seatNum = moderation;
+      const target = seats[seatNum - 1]?.occupant;
+      if (!target) return;
+
+      if (isBackendRoom && roomId) {
+        try {
+          const headers = await getAuthHeaders();
+          await apiFetch(`/rooms/${roomId}/moderate`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              action:
+                action === "mute" && target.micMuted
+                  ? "unmute"
+                  : action,
+              targetUserId: target.id,
+            }),
+          });
+          closeModeration();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : t(S.common.error);
+          Alert.alert(t(S.common.error), message);
+        }
+        return;
+      }
+
       setSeats((prev) => {
         const next = [...prev];
         const target = next[seatNum - 1];
@@ -385,7 +655,7 @@ export default function LobbyScreen() {
         }
         return next;
       });
-      const occName = seats[seatNum - 1]?.occupant?.name ?? `#${seatNum}`;
+      const occName = target.name ?? `#${seatNum}`;
       const labels: Record<typeof action, string> = {
         kick: t(S.lobby.kick),
         mute: t(S.lobby.mute),
@@ -395,7 +665,7 @@ export default function LobbyScreen() {
       pushSystem(`${labels[action]}: ${occName}`);
       closeModeration();
     },
-    [moderation, seats, pushSystem, t, S, closeModeration],
+    [moderation, seats, isBackendRoom, roomId, pushSystem, t, S, closeModeration],
   );
 
   const handleSend = useCallback(async () => {
@@ -406,6 +676,19 @@ export default function LobbyScreen() {
     if (Platform.OS !== "web") {
       await Haptics.selectionAsync();
     }
+    if (isBackendRoom && roomId) {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        Alert.alert(t(S.common.error), t(S.common.error));
+        return;
+      }
+      socket.emit("room:send", { roomId, text }, (resp) => {
+        if (!resp.ok) {
+          Alert.alert(t(S.common.error), resp.error ?? t(S.common.error));
+        }
+      });
+      return;
+    }
     setMessages((prev) => [
       {
         id: makeId(),
@@ -415,21 +698,36 @@ export default function LobbyScreen() {
       },
       ...prev,
     ]);
-  }, [draft, user]);
+  }, [draft, isBackendRoom, roomId, t, S, user]);
 
-  const handleBack = useCallback(() => {
+  const leaveCurrentRoom = useCallback(async () => {
+    if (!isBackendRoom || !roomId) return;
+    try {
+      const headers = await getAuthHeaders();
+      await apiFetch(`/rooms/${roomId}/leave`, {
+        method: "POST",
+        headers,
+      });
+    } catch {
+      // Navigation should not be blocked by a best-effort leave request.
+    }
+  }, [isBackendRoom, roomId]);
+
+  const handleBack = useCallback(async () => {
+    await leaveCurrentRoom();
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace("/rooms");
     }
-  }, []);
+  }, [leaveCurrentRoom]);
 
   const handleLogoutFromPanel = useCallback(async () => {
     setProfileOpen(false);
+    await leaveCurrentRoom();
     await logout();
     router.replace("/");
-  }, [logout]);
+  }, [leaveCurrentRoom, logout]);
 
   const handleProfilePhoto = useCallback(() => {
     setProfileOpen(false);
@@ -566,26 +864,28 @@ export default function LobbyScreen() {
                 <Text style={styles.chatTitle}>{t(S.lobby.chatTitle)}</Text>
               </View>
               <View style={styles.chatHeaderRight}>
-                <Pressable
-                  onPress={handleAddDemoPlayer}
-                  hitSlop={6}
-                  style={({ pressed }) => [
-                    styles.addDemoBtn,
-                    {
-                      borderColor: colors.brandOrange,
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.addDemoText,
-                      { color: colors.brandOrange },
+                {!isBackendRoom ? (
+                  <Pressable
+                    onPress={handleAddDemoPlayer}
+                    hitSlop={6}
+                    style={({ pressed }) => [
+                      styles.addDemoBtn,
+                      {
+                        borderColor: colors.brandOrange,
+                        opacity: pressed ? 0.7 : 1,
+                      },
                     ]}
                   >
-                    {t(S.lobby.addDemo)}
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={[
+                        styles.addDemoText,
+                        { color: colors.brandOrange },
+                      ]}
+                    >
+                      {t(S.lobby.addDemo)}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <Text style={styles.chatCount}>
                   {occupiedCount}/{SLOT_COUNT}
                 </Text>
