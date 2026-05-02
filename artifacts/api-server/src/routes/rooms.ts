@@ -17,7 +17,7 @@ import {
   kickUser,
   getIO,
 } from "../lib/socket";
-import { createLiveKitToken, livekitUrl } from "../lib/livekit";
+import { createLiveKitToken, getLiveKitUrl } from "../lib/livekit";
 
 const router: IRouter = Router();
 
@@ -300,7 +300,7 @@ router.post("/:id/livekit-token", async (req, res) => {
     canPublish,
     canSubscribe: true,
   });
-  res.json({ token, url: livekitUrl, roomName: room.livekitRoom });
+  res.json({ token, url: getLiveKitUrl(), roomName: room.livekitRoom });
 });
 
 const moderateAction = z.discriminatedUnion("action", [

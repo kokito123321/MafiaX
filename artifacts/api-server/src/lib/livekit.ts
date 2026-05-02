@@ -1,13 +1,24 @@
 import { AccessToken } from "livekit-server-sdk";
 
-const apiKey = process.env["LIVEKIT_API_KEY"];
-const apiSecret = process.env["LIVEKIT_API_SECRET"];
-export const livekitUrl = process.env["LIVEKIT_URL"];
+/** Validates env only when video/token routes run — avoids crashing the whole server at import time (e.g. missing Render env). */
+function getLiveKitConfig(): {
+  apiKey: string;
+  apiSecret: string;
+  url: string;
+} {
+  const apiKey = process.env["LIVEKIT_API_KEY"];
+  const apiSecret = process.env["LIVEKIT_API_SECRET"];
+  const url = process.env["LIVEKIT_URL"];
+  if (!apiKey || !apiSecret || !url) {
+    throw new Error(
+      "LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET must all be set in the environment.",
+    );
+  }
+  return { apiKey, apiSecret, url };
+}
 
-if (!apiKey || !apiSecret || !livekitUrl) {
-  throw new Error(
-    "LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET must all be set in the environment.",
-  );
+export function getLiveKitUrl(): string {
+  return getLiveKitConfig().url;
 }
 
 export interface LiveKitTokenOpts {
@@ -19,6 +30,7 @@ export interface LiveKitTokenOpts {
 }
 
 export async function createLiveKitToken(opts: LiveKitTokenOpts): Promise<string> {
+  const { apiKey, apiSecret } = getLiveKitConfig();
   const at = new AccessToken(apiKey, apiSecret, {
     identity: opts.identity,
     name: opts.name,
