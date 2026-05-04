@@ -78,17 +78,27 @@ function mapApiUser(user: ApiUser): User {
     level: user.level,
     xp: user.xp,
     createdAt: user.createdAt,
-    provider: "email",
+    provider: "email", // Will be updated based on actual auth method
   };
 }
 
 async function loadSession(): Promise<{ token: string; user: PublicUser } | null> {
-  const token = await AsyncStorage.getItem(TOKEN_KEY);
-  const raw = await AsyncStorage.getItem(SESSION_KEY);
-  if (!token || !raw) return null;
   try {
-    return { token, user: JSON.parse(raw) as PublicUser };
-  } catch {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const raw = await AsyncStorage.getItem(SESSION_KEY);
+    if (!token || !raw) return null;
+    try {
+      const user = JSON.parse(raw) as PublicUser;
+      return { token, user };
+    } catch (parseError) {
+      console.error('Failed to parse user session:', parseError);
+      // Clear corrupted data
+      await AsyncStorage.removeItem(SESSION_KEY);
+      await AsyncStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
+  } catch (storageError) {
+    console.error('Storage error during session load:', storageError);
     return null;
   }
 }

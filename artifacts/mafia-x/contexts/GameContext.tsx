@@ -97,17 +97,22 @@ async function getToken(): Promise<string | null> {
 }
 
 async function authFetch<T>(path: string, init: RequestInit = {}) {
-  const token = await getToken();
-  if (!token) {
-    throw new Error("No auth token available");
+  try {
+    const token = await getToken();
+    if (!token) {
+      throw new Error("No auth token available");
+    }
+    return apiFetch<T>(path, {
+      ...init,
+      headers: {
+        ...(init.headers ?? {}),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (error) {
+    console.error('Auth fetch error:', error);
+    throw error;
   }
-  return apiFetch<T>(path, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      Authorization: `Bearer ${token}`,
-    },
-  });
 }
 
 export function GameProvider({ children }: { children: React.ReactNode }) {

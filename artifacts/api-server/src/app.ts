@@ -26,7 +26,10 @@ app.use(
     },
   }),
 );
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ 
+  origin: ['https://mafiax-44op.onrender.com', 'http://localhost:3000', 'http://localhost:8081'], 
+  credentials: true 
+}));
 app.use(cookieParser());
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));

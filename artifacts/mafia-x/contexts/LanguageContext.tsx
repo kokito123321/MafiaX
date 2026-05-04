@@ -32,7 +32,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const v = await AsyncStorage.getItem(STORAGE_KEY);
-        if (v && (LANGS.some((l) => l.code === v))) {
+        if (v && LANGS.some((l) => l.code === v)) {
           setLangState(v as LangCode);
         }
       } catch {
