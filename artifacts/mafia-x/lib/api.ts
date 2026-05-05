@@ -18,7 +18,7 @@ export class ApiError extends Error {
   }
 }
 
-export const API_BASE_URL = Platform.select({
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? Platform.select({
   ios: "https://mafiax-44op.onrender.com/api",
   android: "https://mafiax-44op.onrender.com/api",
   web: "https://mafiax-44op.onrender.com/api",
