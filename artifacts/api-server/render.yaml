@@ -3,8 +3,8 @@ services:
     name: mafia-api-server
     env: node
     plan: free
-    buildCommand: "cd artifacts/api-server && pnpm install && pnpm run build"
-    startCommand: "cd artifacts/api-server && pnpm run start"
+    buildCommand: "npm install -g pnpm && pnpm install && cd artifacts/api-server && pnpm run build"
+    startCommand: "cd artifacts/api-server && node --enable-source-maps ./dist/index.mjs"
     envVars:
       - key: DATABASE_URL
         value: postgresql://postgres:Mkvdarilana32145@db.uulexfrpvydusifwixxy.supabase.co:5432/postgres
