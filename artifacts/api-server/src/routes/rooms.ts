@@ -17,11 +17,11 @@ import {
   kickUser,
   getIO,
 } from "../lib/socket";
-import { createLiveKitToken, livekitUrl } from "../lib/livekit";
+import { createLiveKitToken, getLiveKitUrl } from "../lib/livekit";
 
 const router: IRouter = Router();
 
-const ROOM_ENTRY_FEE = 10;
+const ROOM_ENTRY_FEE = 1;
 const ROOM_CAPACITY = 11;
 
 router.use(requireAuth);
@@ -102,7 +102,20 @@ router.post("/", async (req, res) => {
       isSystem: true,
     });
   });
-  res.json({ roomId: id });
+  res.json({
+    roomId: id,
+    room: {
+      id,
+      name: parsed.data.name.trim(),
+      hostId: me.id,
+      hostName: me.name,
+      isPrivate: parsed.data.isPrivate ?? false,
+      capacity: ROOM_CAPACITY,
+      memberCount: 1,
+      status: "waiting",
+      createdAt: new Date().toISOString(),
+    },
+  });
 });
 
 router.get("/:id", async (req, res) => {
@@ -300,7 +313,7 @@ router.post("/:id/livekit-token", async (req, res) => {
     canPublish,
     canSubscribe: true,
   });
-  res.json({ token, url: livekitUrl, roomName: room.livekitRoom });
+  res.json({ token, url: getLiveKitUrl(), roomName: room.livekitRoom });
 });
 
 const moderateAction = z.discriminatedUnion("action", [
@@ -314,6 +327,13 @@ const moderateAction = z.discriminatedUnion("action", [
     action: z.literal("swap"),
     fromUserId: z.string(),
     toUserId: z.string(),
+  }),
+  z.object({
+    action: z.literal("move"),
+    userId: z.string(),
+    seatNumber: z.number().int().min(1).max(ROOM_CAPACITY),
+    hasCamera: z.boolean().optional(),
+    hasMic: z.boolean().optional(),
   }),
 ]);
 
@@ -335,70 +355,74 @@ router.post("/:id/moderate", async (req, res) => {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  if (room.hostId !== me.id && parsed.data.action !== "swap") {
+  if (
+    room.hostId !== me.id &&
+    parsed.data.action !== "swap" &&
+    parsed.data.action !== "move"
+  ) {
     res.status(403).json({ error: "host_only" });
     return;
   }
-  const action = parsed.data.action;
-  if (action === "kick") {
+  const actionData = parsed.data;
+  if (actionData.action === "kick") {
     await db
       .delete(roomMembersTable)
       .where(
         and(
           eq(roomMembersTable.roomId, roomId),
-          eq(roomMembersTable.userId, parsed.data.targetUserId),
+          eq(roomMembersTable.userId, actionData.targetUserId),
         ),
       );
-    kickUser(roomId, parsed.data.targetUserId, "kicked");
+    kickUser(roomId, actionData.targetUserId, "kicked");
     await broadcastSystemMessage(roomId, `Player kicked by host`);
-  } else if (action === "mute" || action === "unmute") {
+  } else if (actionData.action === "mute" || actionData.action === "unmute") {
     await db
       .update(roomMembersTable)
-      .set({ isMuted: action === "mute" })
+      .set({ isMuted: actionData.action === "mute" })
       .where(
         and(
           eq(roomMembersTable.roomId, roomId),
-          eq(roomMembersTable.userId, parsed.data.targetUserId),
+          eq(roomMembersTable.userId, actionData.targetUserId),
         ),
       );
     await broadcastSystemMessage(
       roomId,
-      action === "mute" ? "Player muted" : "Player unmuted",
+      actionData.action === "mute" ? "Player muted" : "Player unmuted",
     );
-  } else if (action === "block" || action === "unblock") {
+  } else if (actionData.action === "block" || actionData.action === "unblock") {
     await db
       .update(roomMembersTable)
-      .set({ isBlocked: action === "block" })
+      .set({ isBlocked: actionData.action === "block" })
       .where(
         and(
           eq(roomMembersTable.roomId, roomId),
-          eq(roomMembersTable.userId, parsed.data.targetUserId),
+          eq(roomMembersTable.userId, actionData.targetUserId),
         ),
       );
     await broadcastSystemMessage(
       roomId,
-      action === "block" ? "Player blocked" : "Player unblocked",
+      actionData.action === "block" ? "Player blocked" : "Player unblocked",
     );
-  } else if (action === "ban") {
+  } else if (actionData.action === "ban") {
     await db
       .update(usersTable)
       .set({ isBanned: true })
-      .where(eq(usersTable.id, parsed.data.targetUserId));
+      .where(eq(usersTable.id, actionData.targetUserId));
     await db
       .delete(roomMembersTable)
       .where(
         and(
           eq(roomMembersTable.roomId, roomId),
-          eq(roomMembersTable.userId, parsed.data.targetUserId),
+          eq(roomMembersTable.userId, actionData.targetUserId),
         ),
       );
-    kickUser(roomId, parsed.data.targetUserId, "banned");
+    kickUser(roomId, actionData.targetUserId, "banned");
     await broadcastSystemMessage(roomId, `Player banned by host`);
-  } else if (action === "swap") {
+  } else if (actionData.action === "swap") {
     // Swap two seat numbers (anyone in the room can request a swap they're part of)
     if (
-      parsed.data.fromUserId !== me.id &&
-      parsed.data.toUserId !== me.id &&
+      actionData.fromUserId !== me.id &&
+      actionData.toUserId !== me.id &&
       room.hostId !== me.id
     ) {
       res.status(403).json({ error: "not_allowed" });
@@ -408,8 +432,8 @@ router.post("/:id/moderate", async (req, res) => {
       .select()
       .from(roomMembersTable)
       .where(eq(roomMembersTable.roomId, roomId));
-    const a = members.find((m) => m.userId === parsed.data.fromUserId);
-    const b = members.find((m) => m.userId === parsed.data.toUserId);
+    const a = members.find((m) => m.userId === actionData.fromUserId);
+    const b = members.find((m) => m.userId === actionData.toUserId);
     if (!a || !b) {
       res.status(404).json({ error: "members_not_found" });
       return;
@@ -445,6 +469,50 @@ router.post("/:id/moderate", async (req, res) => {
         );
     });
     await broadcastSystemMessage(roomId, `Players swapped seats`);
+  } else if (actionData.action === "move") {
+    if (actionData.userId !== me.id && room.hostId !== me.id) {
+      res.status(403).json({ error: "not_allowed" });
+      return;
+    }
+    const members = await db
+      .select()
+      .from(roomMembersTable)
+      .where(eq(roomMembersTable.roomId, roomId));
+    const moving = members.find((m) => m.userId === actionData.userId);
+    if (!moving) {
+      res.status(404).json({ error: "member_not_found" });
+      return;
+    }
+    const target = members.find((m) => m.seatNumber === actionData.seatNumber);
+    await db.transaction(async (tx) => {
+      if (target && target.userId !== moving.userId) {
+        await tx
+          .update(roomMembersTable)
+          .set({ seatNumber: moving.seatNumber })
+          .where(
+            and(
+              eq(roomMembersTable.roomId, roomId),
+              eq(roomMembersTable.userId, target.userId),
+            ),
+          );
+      }
+      await tx
+        .update(roomMembersTable)
+        .set({
+          seatNumber: actionData.seatNumber,
+          ...(actionData.hasCamera !== undefined
+            ? { hasCamera: actionData.hasCamera }
+            : {}),
+          ...(actionData.hasMic !== undefined ? { hasMic: actionData.hasMic } : {}),
+        })
+        .where(
+          and(
+            eq(roomMembersTable.roomId, roomId),
+            eq(roomMembersTable.userId, moving.userId),
+          ),
+        );
+    });
+    await broadcastSystemMessage(roomId, `Player moved seats`);
   }
   await broadcastRoomState(roomId);
   res.json({ ok: true });

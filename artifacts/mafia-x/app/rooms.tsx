@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   Alert,
@@ -18,6 +18,7 @@ import { GiftModal } from "@/components/GiftModal";
 import { MafiaXLogo } from "@/components/MafiaXLogo";
 import { ProfilePanel } from "@/components/ProfilePanel";
 import { XCoin } from "@/components/XCoin";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   ROOM_ENTRY_FEE,
@@ -38,8 +39,9 @@ export default function RoomsScreen() {
     showGiftModal,
     giftAmount,
     dismissGiftModal,
+    refreshRooms,
     createRoom,
-    spendCoins,
+    joinRoom,
   } = useGame();
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -48,6 +50,30 @@ export default function RoomsScreen() {
       router.replace("/");
     }
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return undefined;
+      refreshRooms().catch(() => {
+        // Keep the existing list if the API is temporarily unavailable.
+      });
+      return undefined;
+    }, [refreshRooms, user]),
+  );
+
+  const showInsufficientBalance = useCallback(() => {
+    Alert.alert(
+      t(S.rooms.insufficientTitle),
+      t(S.rooms.insufficientBody),
+      [
+        { text: t(S.common.cancel), style: "cancel" },
+        {
+          text: t(S.rooms.topUp),
+          onPress: () => router.push("/shop"),
+        },
+      ],
+    );
+  }, [t, S]);
 
   const handleLogout = useCallback(async () => {
     setProfileOpen(false);
@@ -60,42 +86,46 @@ export default function RoomsScreen() {
     router.push("/profile");
   }, []);
 
-  const enterAfterCharge = useCallback(async () => {
-    const ok = await spendCoins(ROOM_ENTRY_FEE);
-    if (!ok) {
-      Alert.alert(
-        t(S.rooms.insufficientTitle),
-        t(S.rooms.insufficientBody),
-        [
-          { text: t(S.common.cancel), style: "cancel" },
-          { text: t(S.rooms.topUp), onPress: () => router.push("/shop") },
-        ],
-      );
-      return false;
-    }
-    return true;
-  }, [spendCoins, t, S]);
-
   const handleEnterRoom = useCallback(
-    async (_room: Room) => {
+    async (room: Room) => {
       if (Platform.OS !== "web") {
         await Haptics.selectionAsync();
       }
-      const ok = await enterAfterCharge();
-      if (ok) router.push("/lobby");
+      try {
+        await joinRoom(room.id);
+        router.push({ pathname: "/lobby", params: { roomId: room.id } });
+      } catch (error) {
+        if (
+          error instanceof ApiError &&
+          (error.status === 402 || error.code === "insufficient_balance")
+        ) {
+          showInsufficientBalance();
+          return;
+        }
+        Alert.alert(t(S.common.error), t(S.common.error));
+      }
     },
-    [enterAfterCharge],
+    [joinRoom, showInsufficientBalance, t, S],
   );
 
   const handleCreateRoom = useCallback(async () => {
     if (Platform.OS !== "web") {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    const ok = await enterAfterCharge();
-    if (!ok) return;
-    createRoom();
-    router.push("/lobby");
-  }, [createRoom, enterAfterCharge]);
+    try {
+      const room = await createRoom();
+      router.push({ pathname: "/lobby", params: { roomId: room.id } });
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 402 || error.code === "insufficient_balance")
+      ) {
+        showInsufficientBalance();
+        return;
+      }
+      Alert.alert(t(S.common.error), t(S.common.error));
+    }
+  }, [createRoom, showInsufficientBalance, t, S]);
 
   const handleOpenShop = useCallback(() => {
     router.push("/shop");

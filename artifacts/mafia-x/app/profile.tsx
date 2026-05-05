@@ -76,10 +76,14 @@ export default function ProfileScreen() {
     setBusy(true);
     try {
       await setAvatar(null);
+      Alert.alert(t(S.common.success), t(S.profile.removed));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : t(S.common.error);
+      Alert.alert(t(S.common.error), msg);
     } finally {
       setBusy(false);
     }
-  }, [setAvatar]);
+  }, [setAvatar, t, S]);
 
   if (!user) return null;
   const initial = (user.nickname.charAt(0) ?? "U").toUpperCase();

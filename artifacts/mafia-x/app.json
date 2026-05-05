@@ -21,6 +21,7 @@
       }
     },
     "android": {
+      "package": "com.lashex.mafiax",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
@@ -33,7 +34,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://mafiax-44op.onrender.com"
         }
       ],
       "expo-font",

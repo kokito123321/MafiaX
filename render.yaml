@@ -1,0 +1,38 @@
+# Render Blueprint — sync or copy Build/Start into an existing Web Service.
+# Secrets (DATABASE_URL, LIVEKIT_*): set only in Dashboard → Environment (not here).
+
+services:
+  # API Server
+  - type: web
+    name: mafiax-api
+    runtime: node
+    plan: free
+    # Render sets CI=true → pnpm defaults to frozen lockfile; overrides vs lockfile then fails.
+    # Explicit --no-frozen-lockfile. Later: run `pnpm install` locally, commit pnpm-lock.yaml, optional frozen.
+    buildCommand: >-
+      corepack enable && corepack prepare pnpm@9.15.9 --activate
+      && pnpm install --no-frozen-lockfile && pnpm run build:api-server
+    startCommand: pnpm --filter @workspace/api-server run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.1
+      - key: SKIP_EXPO_STATIC_BUILD
+        value: "1"
+
+  # Frontend Web App
+  - type: web
+    name: mafiax-app
+    runtime: node
+    plan: free
+    buildCommand: >-
+      corepack enable && corepack prepare pnpm@9.15.9 --activate
+      && pnpm install --no-frozen-lockfile 
+      && cd artifacts/mafia-x && pnpm install --no-frozen-lockfile 
+      && pnpm run build:web
+    startCommand: cd artifacts/mafia-x && node server/web-server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.1
+      - key: EXPO_PUBLIC_API_URL
+        value: https://mafiax-api.onrender.com
+    healthCheckPath: /

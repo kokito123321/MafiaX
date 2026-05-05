@@ -67,8 +67,20 @@ function getDeploymentDomain() {
     return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
   }
 
+  if (process.env.RENDER_EXTERNAL_URL) {
+    return stripProtocol(process.env.RENDER_EXTERNAL_URL);
+  }
+
+  if (process.env.RENDER_INTERNAL_HOSTNAME) {
+    return stripProtocol(process.env.RENDER_INTERNAL_HOSTNAME);
+  }
+
+  if (process.env.DEPLOYMENT_DOMAIN) {
+    return stripProtocol(process.env.DEPLOYMENT_DOMAIN);
+  }
+
   console.error(
-    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
+    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, EXPO_PUBLIC_DOMAIN, RENDER_EXTERNAL_URL, or DEPLOYMENT_DOMAIN. For API-only CI (e.g. Render Web Service for the backend), set SKIP_EXPO_STATIC_BUILD=1 or use: pnpm run build:api-server from the repo root.",
   );
   process.exit(1);
 }
@@ -506,6 +518,13 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
 }
 
 async function main() {
+  if (process.env.SKIP_EXPO_STATIC_BUILD === "1") {
+    console.log(
+      "Skipping static Expo build (SKIP_EXPO_STATIC_BUILD=1). Use this for API-only deploys.",
+    );
+    process.exit(0);
+  }
+
   console.log("Building static Expo Go deployment...");
 
   setupSignalHandlers();

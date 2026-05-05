@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="theme-color" content="#000000">
+    <title>Mafia X - Georgian Mafia Video Chat Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: #1a1a1a;
+            color: white;
+        }
+        #root {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-size: 18px;
+        }
+        .error {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
+            color: #ff6b6b;
+        }
+        .error h2 {
+            margin-bottom: 16px;
+        }
+        .error p {
+            color: #ccc;
+            margin-bottom: 24px;
+        }
+        .error button {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .error button:hover {
+            background: #ff5252;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading">
+            <div>Loading Mafia X...</div>
+        </div>
+    </div>
+
+    <script>
+        // Error handling for script loading
+        window.addEventListener('error', function(e) {
+            const root = document.getElementById('root');
+            root.innerHTML = `
+                <div class="error">
+                    <h2>Application Error</h2>
+                    <p>Failed to load Mafia X application.</p>
+                    <button onclick="window.location.reload()">Reload</button>
+                </div>
+            `;
+        });
+
+        // Load the Expo web bundle
+        const script = document.createElement('script');
+        script.src = './_expo/static/js/web/bundle.js';
+        script.async = true;
+        
+        script.onload = function() {
+            console.log('Mafia X loaded successfully');
+        };
+        
+        script.onerror = function() {
+            const root = document.getElementById('root');
+            root.innerHTML = `
+                <div class="error">
+                    <h2>Loading Failed</h2>
+                    <p>Could not load the Mafia X application bundle.</p>
+                    <button onclick="window.location.reload()">Reload</button>
+                </div>
+            `;
+        };
+        
+        document.body.appendChild(script);
+    </script>
+</body>
+</html>

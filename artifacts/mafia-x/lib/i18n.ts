@@ -301,6 +301,12 @@ export const STR = {
       "Удалить фото",
       "Видалити фото",
     ),
+    removed: t(
+      "ფოტო წაშლილია",
+      "Photo removed",
+      "Фото удалено",
+      "Фото видалено",
+    ),
     tapToOpen: t(
       "შეეხე ავატარს ფოტოს რედაქტირებისთვის",
       "Tap avatar to edit photo",
