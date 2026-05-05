@@ -3,7 +3,7 @@ services:
     name: mafia-api-server
     env: node
     plan: free
-    buildCommand: "corepack enable && pnpm install --no-frozen-lockfile || npm install && cd artifacts/api-server && npm run build"
+    buildCommand: "npm install -g pnpm@9.15.9 && pnpm install --no-frozen-lockfile && cd artifacts/api-server && pnpm run build"
     startCommand: "cd artifacts/api-server && node --enable-source-maps ./dist/index.mjs"
     envVars:
       - key: DATABASE_URL
