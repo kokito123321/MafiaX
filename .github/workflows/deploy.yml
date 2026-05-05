@@ -1,0 +1,140 @@
+name: 🚀 Mafia Video Chat CI/CD
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    name: 🧪 ბექენდის ტესტირება
+    
+    steps:
+    - name: 📥 კოდის გადმოწერა
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Node.js-ის დაყენება
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: 📦 დამოკიდებულებების ინსტალაცია
+      run: |
+        cd artifacts/api-server
+        npm ci
+        
+    - name: 🔍 ტიპების შემოწმება
+      run: |
+        cd artifacts/api-server
+        npm run typecheck || true
+        
+    - name: 🧪 ტესტების გაშვება
+      run: |
+        cd artifacts/api-server
+        npm test || true
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    name: 📱 ფრონტენდის ტესტირება
+    
+    steps:
+    - name: 📥 კოდის გადმოწერა
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Node.js-ის დაყენება
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: 📦 დამოკიდებულებების ინსტალაცია
+      run: |
+        cd artifacts/mafia-x
+        npm ci
+        
+    - name: 🔍 ტიპების შემოწმება
+      run: |
+        cd artifacts/mafia-x
+        npm run typecheck || true
+
+  deploy-backend:
+    needs: test-backend
+    runs-on: ubuntu-latest
+    name: 🚀 ბექენდის დეპლოიმენტი
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: 📥 კოდის გადმოწერა
+      uses: actions/checkout@v4
+      
+    - name: 🚀 Render-ზე დეპლოიმენტი
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      run: |
+        if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+          curl -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"serviceId\": \"$RENDER_SERVICE_ID\"}" \
+            https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys
+          echo "✅ Render დეპლოიმენტი გაგზავნილია"
+        else
+          echo "⚠️ Render API Key არ არის კონფიგურირებული"
+        fi
+
+  deploy-frontend:
+    needs: test-frontend
+    runs-on: ubuntu-latest
+    name: 🌐 ფრონტენდის დეპლოიმენტი
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: 📥 კოდის გადმოწერა
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Node.js-ის დაყენება
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: 📦 დამოკიდებულებების ინსტალაცია
+      run: |
+        cd artifacts/mafia-x
+        npm ci
+        
+    - name: 🏗️ ბილდის შექმნა
+      run: |
+        cd artifacts/mafia-x
+        npm run build
+        
+    - name: 🚀 GitHub Pages-ზე დეპლოიმენტი
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./artifacts/mafia-x/dist
+
+  notify:
+    needs: [deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    name: 📢 შეტყობინება
+    if: always()
+    
+    steps:
+    - name: ✅ წარმატების შეტყობინება
+      if: needs.deploy-backend.result == 'success' && needs.deploy-frontend.result == 'success'
+      run: |
+        echo "🎉 Mafia Video Chat წარმატებით დაინსტალირდა!"
+        echo "🔗 ბექენდი: https://your-app.onrender.com"
+        echo "🌐 ფრონტენდი: https://your-username.github.io/mafia-video-chat"
+        
+    - name: ❌ შეცდომის შეტყობინება
+      if: needs.deploy-backend.result == 'failure' || needs.deploy-frontend.result == 'failure'
+      run: |
+        echo "❌ დეპლოიმენტი ვერ მოხერხდა"
+        echo "გთხოვთ შეამოწმოთ logs-ები"

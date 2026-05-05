@@ -221,61 +221,111 @@ export default function LobbyScreen() {
   const swapSeats = useCallback(
     async (a: number, b: number) => {
       if (a === b) return;
-      setSeats((prev) => {
-        const next = [...prev];
-        const sa = next[a - 1];
-        const sb = next[b - 1];
-        if (!sa || !sb) return prev;
-        next[a - 1] = { number: sa.number, occupant: sb.occupant };
-        next[b - 1] = { number: sb.number, occupant: sa.occupant };
-        return next;
-      });
-      if (Platform.OS !== "web") {
-        await Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success,
-        );
+      
+      // Validate seat numbers
+      if (a < 1 || a > SLOT_COUNT || b < 1 || b > SLOT_COUNT) {
+        pushSystem(t(S.lobby.swapError) || "Invalid seat numbers");
+        return;
       }
-      pushSystem(`#${a} ⇄ #${b} — ${t(S.lobby.swapDone)}`);
+
+      try {
+        setSeats((prev) => {
+          const next = [...prev];
+          const sa = next[a - 1];
+          const sb = next[b - 1];
+          
+          // Additional validation
+          if (!sa || !sb) {
+            pushSystem(t(S.lobby.swapError) || "Seat not found");
+            return prev;
+          }
+          
+          // Don't swap if both seats are empty
+          if (!sa.occupant && !sb.occupant) {
+            pushSystem(t(S.lobby.swapError) || "Cannot swap empty seats");
+            return prev;
+          }
+          
+          // Perform the swap safely
+          const tempOccupant = sa.occupant;
+          next[a - 1] = { number: sa.number, occupant: sb.occupant };
+          next[b - 1] = { number: sb.number, occupant: tempOccupant };
+          return next;
+        });
+        
+        if (Platform.OS !== "web") {
+          await Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Success,
+          );
+        }
+        pushSystem(`#${a} ⇄ #${b} — ${t(S.lobby.swapDone)}`);
+      } catch (error) {
+        console.error("Seat swap error:", error);
+        pushSystem(t(S.lobby.swapError) || "Swap failed");
+      }
     },
     [pushSystem, t, S],
   );
 
   const handleSeatPress = useCallback(
     (seatNum: number) => {
-      // Swap mode active
-      if (armedSeat !== null) {
-        if (armedSeat === seatNum) {
-          setArmedSeat(null);
+      try {
+        // Validate seat number
+        if (seatNum < 1 || seatNum > SLOT_COUNT) {
           return;
         }
-        const a = armedSeat;
-        setArmedSeat(null);
-        swapSeats(a, seatNum);
-        return;
-      }
-      const seat = seats[seatNum - 1];
-      if (!seat) return;
-      if (!seat.occupant) {
-        setSeatSelector(seatNum);
-      } else if (seat.occupant.isHost) {
-        // host's own seat - allow toggling camera by re-running selector
-        setSeatSelector(seatNum);
-      } else {
-        setModeration(seatNum);
+
+        // Swap mode active
+        if (armedSeat !== null) {
+          if (armedSeat === seatNum) {
+            setArmedSeat(null);
+            return;
+          }
+          const a = armedSeat;
+          setArmedSeat(null);
+          swapSeats(a, seatNum);
+          return;
+        }
+        
+        const seat = seats[seatNum - 1];
+        if (!seat) return;
+        
+        if (!seat.occupant) {
+          setSeatSelector(seatNum);
+        } else if (seat.occupant.isHost) {
+          // host's own seat - allow toggling camera by re-running selector
+          setSeatSelector(seatNum);
+        } else {
+          setModeration(seatNum);
+        }
+      } catch (error) {
+        console.error("Handle seat press error:", error);
+        pushSystem(t(S.lobby.swapError) || "Action failed");
       }
     },
-    [armedSeat, seats, swapSeats],
+    [armedSeat, seats, swapSeats, pushSystem, t, S],
   );
 
   const handleSeatLongPress = useCallback(
     async (seatNum: number) => {
-      const seat = seats[seatNum - 1];
-      if (!seat?.occupant) return;
-      setArmedSeat(seatNum);
-      if (Platform.OS !== "web") {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      try {
+        // Validate seat number
+        if (seatNum < 1 || seatNum > SLOT_COUNT) {
+          return;
+        }
+        
+        const seat = seats[seatNum - 1];
+        if (!seat?.occupant) return;
+        
+        setArmedSeat(seatNum);
+        if (Platform.OS !== "web") {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        }
+        pushSystem(t(S.lobby.swapHint));
+      } catch (error) {
+        console.error("Handle seat long press error:", error);
+        pushSystem(t(S.lobby.swapError) || "Action failed");
       }
-      pushSystem(t(S.lobby.swapHint));
     },
     [seats, pushSystem, t, S],
   );
