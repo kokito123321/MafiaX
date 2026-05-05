@@ -7,7 +7,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
-const WEB_ROOT = path.resolve(__dirname, "..", "public");
+const WEB_ROOT = path.resolve(__dirname, "..", "dist");
 const PORT = process.env.PORT || 3000;
 
 const MIME_TYPES = {
