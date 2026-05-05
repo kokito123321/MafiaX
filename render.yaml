@@ -28,7 +28,7 @@ services:
       corepack enable && corepack prepare pnpm@9.15.9 --activate
       && pnpm install --no-frozen-lockfile 
       && cd artifacts/mafia-x && pnpm install --no-frozen-lockfile 
-      && pnpm run build:simple
+      && npx @expo/cli export --platform web
     startCommand: cd artifacts/mafia-x && node server/web-server.js
     envVars:
       - key: NODE_VERSION
